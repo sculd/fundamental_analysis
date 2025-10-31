@@ -46,15 +46,7 @@ def parse_args():
 
 
 def validate_date(date_str: str) -> bool:
-    """
-    Validate date string format.
-
-    Args:
-        date_str: Date string in YYYY-MM-DD format
-
-    Returns:
-        True if valid, False otherwise
-    """
+    """Validate date string is in YYYY-MM-DD format."""
     try:
         datetime.strptime(date_str, "%Y-%m-%d")
         return True
@@ -66,7 +58,6 @@ def main():
     """Main entry point for data fetching."""
     args = parse_args()
 
-    # Validate dates
     if not validate_date(args.start_date):
         logger.error(f"Invalid start date format: {args.start_date}. Use YYYY-MM-DD")
         sys.exit(1)
@@ -75,7 +66,6 @@ def main():
         logger.error(f"Invalid end date format: {args.end_date}. Use YYYY-MM-DD")
         sys.exit(1)
 
-    # Check that start_date is before end_date
     start_dt = datetime.strptime(args.start_date, "%Y-%m-%d")
     end_dt = datetime.strptime(args.end_date, "%Y-%m-%d")
 
@@ -83,7 +73,6 @@ def main():
         logger.error("start-date must be before end-date")
         sys.exit(1)
 
-    # Log configuration
     logger.info("=" * 60)
     logger.info("Sharadar Data Fetch")
     logger.info("=" * 60)
@@ -94,7 +83,6 @@ def main():
     logger.info("=" * 60)
 
     try:
-        # Initialize fetcher and run
         fetcher = DataFetcher()
         fetcher.fetch_all(
             start_date=args.start_date,

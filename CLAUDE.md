@@ -19,6 +19,10 @@ A Python-based fundamental analysis system for screening stocks based on financi
 - Start with fetch logic, fetch the data for a good large period (e.g. 5 years from 2019 to 2024) of time, then work with the fetched local data.
 - Use Polars instead of Pandas for multithreading speed-up.
 - Leave __init__.py mostly empty unless necessary. Avoid using __all__ in the __init__.py.
+- I do not want the code be verbose. Refrain from adding meaningless, trivial comment. 
+  - It is best if the meaning of variable can be understood from its name.
+  - Do not make the doc string to be absolutely formal. Follow the format, but do not add args, return, unless necessary.
+  - If the args and return values are obvious, omit it.
 
 **Key Design Principles:**
 - **No Look-Ahead Bias**: Only use data that would have been available at the analysis date
@@ -118,11 +122,18 @@ workfolder/
 
 **Data Storage Format:**
 - All local data is stored in **Parquet format** for efficient storage and fast I/O with Polars
-- **Date-partitioned storage** for efficient querying by time period:
-  - SF1 fundamentals: `data/raw/sf1/sf1_YYYY.parquet` (e.g., `sf1_2020.parquet`, `sf1_2021.parquet`)
-  - SEP prices: `data/raw/sep/sep_YYYY.parquet`
-  - TICKERS metadata: `data/raw/tickers/tickers.parquet` (single file, updated as needed)
-- Processed metrics: `data/processed/*.parquet`
+- **Quarterly-partitioned storage** for SF1 (fundamentals are quarterly):
+  - SF1 fundamentals: `data/raw/sf1/sf1_YYYYQN.parquet` (e.g., `sf1_2023Q1.parquet`, `sf1_2023Q2.parquet`)
+  - Each file contains all tickers for that specific quarter (~4,700-5,000 records, ~1.5MB per quarter)
+- **Year-partitioned storage** for SEP (daily price data):
+  - SEP prices: `data/raw/sep/sep_YYYY.parquet` (e.g., `sep_2023.parquet`)
+  - Contains OHLCV data (Open, High, Low, Close, Volume) plus adjusted close prices
+  - Each file contains all tickers for that year (~2.2M records per year, ~26MB per year)
+- **Dated TICKERS metadata**: `data/raw/tickers/tickers_YYYY-MM-DD.parquet`
+  - Filename includes fetch date since the table is a snapshot that updates over time
+  - Example: `tickers_2025-10-31.parquet` (17,331 tickers, 699KB)
+- **Processed metrics**: `data/processed/*.parquet`
+- **Overwrite behavior**: Use `--overwrite` flag to re-download existing files, otherwise skips existing quarters/years/dates
 
 ## Development Commands
 
@@ -133,7 +144,11 @@ workfolder/
 ```bash
 #  Fetch the fundamental data over a date range
 #  This fetches ALL tickers available in Sharadar for the given time period
+#  By default, skips existing quarterly files (incremental updates)
 python main_fetch.py --start-date 2018-01-01 --end-date 2023-12-31
+
+#  Force re-download and overwrite existing files
+python main_fetch.py --start-date 2023-01-01 --end-date 2023-12-31 --overwrite
 
 # Run screening analysis at a specific historical date
 python main.py --analysis-date 2020-01-15
@@ -175,8 +190,12 @@ The `--strategy` flag is required for `main.py`. `all` value is default for `--s
   - `TICKERS`: Ticker metadata including industry classification and market cap
     - Fetch all available tickers, **excluding delisted companies**
     - Filter out tickers where `isdelisted` field is True
-  - `SEP` (Equity Prices): Daily price data for calculating forward returns
-  - `DAILY` (Daily metrics): Alternative price source with additional metrics
+  - `SEP` (Sharadar Equity Prices): Daily OHLCV price data for calculating forward returns
+    - **Requires separate SEP subscription** (in addition to SFA)
+    - Columns: ticker, date, open, high, low, close, volume, closeadj (dividend-adjusted), closeunadj
+    - Used for: calculating forward returns, price-based ratios, backtesting performance
+  - `DAILY` (Daily metrics): Contains daily fundamental ratios (P/E, P/B, market cap, enterprise value)
+    - Part of SFA subscription, no separate subscription needed
 
 **Development Approach**:
 - Start with a small test set of tickers (~10-50 stocks) for faster iteration and debugging
