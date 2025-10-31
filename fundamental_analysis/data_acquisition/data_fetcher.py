@@ -1,11 +1,12 @@
 """Data fetcher orchestration for downloading and saving Sharadar data."""
 
-from datetime import datetime
-from pathlib import Path
+from datetime import datetime, timedelta
 from typing import Optional
+
 import polars as pl
 
-from fundamental_analysis.data_acquisition.sharadar_client import SharadarClient
+from fundamental_analysis.data_acquisition.sharadar_client import \
+    SharadarClient
 from fundamental_analysis.utils.config import Config
 from fundamental_analysis.utils.logger import setup_logger
 
@@ -53,8 +54,8 @@ class DataFetcher:
         Intelligently fetches only missing quarters. If existing quarters found, only fetches
         from the most recent quarter forward. Use --overwrite to re-fetch all quarters.
         """
-        from datetime import datetime, timedelta
         import re
+        from datetime import datetime, timedelta
 
         end_dt = datetime.strptime(end_date, "%Y-%m-%d")
         adjusted_end_dt = end_dt - timedelta(days=Config.REPORTING_DELAY_DAYS)
@@ -156,7 +157,6 @@ class DataFetcher:
         overwrite: bool = False,
     ) -> None:
         """Fetch and save SEP price data, partitioned by day."""
-        from datetime import datetime, timedelta
 
         logger.info(f"Fetching and saving SEP data from {start_date} to {end_date}...")
 

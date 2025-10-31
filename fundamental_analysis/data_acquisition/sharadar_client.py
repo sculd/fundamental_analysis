@@ -2,8 +2,9 @@
 
 import time
 from typing import Optional
-import polars as pl
+
 import nasdaqdatalink
+import polars as pl
 
 from fundamental_analysis.utils.config import Config
 from fundamental_analysis.utils.logger import setup_logger
