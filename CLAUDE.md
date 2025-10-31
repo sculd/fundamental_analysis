@@ -1,26 +1,44 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance to Claude Code (claude.ai/code).
 
 ## Project Overview
 
-A Python-based fundamental analysis system for screening stocks based on financial metrics. The primary goal is to identify potentially undervalued companies by comparing fundamental ratios (e.g., price-to-cash, P/E, P/B) against industry peers, using statistical outlier detection.
+A Python-based fundamental analysis system for screening stocks based on financial metrics. The primary goal is to identify companies whose fundamental metrics have statistical outlier values, meaning they are potentially over/undervalued companies (e.g., price-to-cash, P/E, P/B) against industry peers against industry peers.
 
 **Core Methodology:**
-- Fetch fundamental data from financial APIs (Tiingo or Alpha Vantage)
-- Calculate key fundamental ratios for all companies
-- Segment companies by industry (GICS sectors) and market cap
+- Fetch historical fundamental data from Sharadar (NASDAQ Data Link)
+- Perform point-in-time analysis: analyze at a given date using only data available before that date
+- Calculate key fundamental ratios for all companies at each analysis date
+  - Only use ratios (not absolute values) to normalize the metrics.
+- Segment companies by industry (GICS sectors) and market cap and potentially by other dimensions.
+  - This logic needs to be abstracted so that the expansion can be made.
 - Compute statistical distributions (mean, std dev) within each segment
 - Identify outliers (e.g., companies > 2 sigma from segment mean)
+- Calculate forward returns from analysis date for backtesting performance
+- Start with fetch logic, fetch the data for a good large period (e.g. 5 years from 2019 to 2024) of time, then work with the fetched local data.
+- Use Polars instead of Pandas for multithreading speed-up.
+- Leave __init__.py mostly empty unless necessary. Avoid using __all__ in the __init__.py.
+
+**Key Design Principles:**
+- **No Look-Ahead Bias**: Only use data that would have been available at the analysis date
+- **Historical Analysis**: Support running screening at any historical date
+- **Forward Returns**: Calculate future performance (e.g., 1M, 3M, 6M, 1Y returns) from analysis date
+- **Backtesting**: Enable evaluation of screening strategy performance over time
 
 ## Architecture
 
 **Data Pipeline:**
-1. **Data Acquisition Layer**: API clients for fetching fundamental data (balance sheets, income statements, cash flow)
-2. **Data Processing Layer**: pandas-based transformations to calculate ratios and metrics
-3. **Segmentation Engine**: Group companies by industry classification and size
-4. **Statistical Analysis**: Calculate distributions and identify outliers within segments
-5. **Screening/Reporting**: Output undervalued candidates with supporting metrics
+1. **Data Acquisition Layer**: API clients for fetching historical fundamental data and price data
+   - Fundamental data: Balance sheets, income statements, cash flow (SF1 table)
+   - Price data: Historical prices for forward return calculation (SEP table)
+   - Metadata: Ticker information, sector classifications (TICKERS table)
+2. **Point-in-Time Processing**: Ensure only data available at analysis date is used
+3. **Data Processing Layer**: polars-based transformations to calculate ratios and metrics
+4. **Segmentation Engine**: Group companies by industry classification and size
+5. **Statistical Analysis**: Calculate distributions and identify outliers within segments
+6. **Forward Returns Calculation**: Compute future returns (1M, 3M, 6M, 1Y) from analysis date
+7. **Screening/Reporting**: Output undervalued candidates with supporting metrics and forward returns
 
 **Key Metrics to Calculate:**
 - Price-to-Cash ratio
@@ -29,6 +47,10 @@ A Python-based fundamental analysis system for screening stocks based on financi
 - Debt-to-Equity
 - Current Ratio
 - Return on Equity (ROE)
+- Return on Invested Capital (ROIC)
+- Earnings per Share (EPS) Growth Rate
+- Revenue Growth Rate
+- EV/EBITDA Ratio
 
 ## Project Structure
 
@@ -38,14 +60,14 @@ workfolder/
 │   ├── __init__.py
 │   ├── data_acquisition/            # API clients and data fetching
 │   │   ├── __init__.py
-│   │   ├── tiingo_client.py         # Tiingo API integration
-│   │   ├── alpha_vantage_client.py  # Alpha Vantage API (alternative)
+│   │   ├── sharadar_client.py       # Sharadar/NASDAQ Data Link integration
 │   │   └── data_fetcher.py          # Unified interface for data sources
 │   ├── metrics/                     # Financial ratio calculations
 │   │   ├── __init__.py
-│   │   ├── fundamental_ratios.py    # P/E, P/B, P/C calculations
+│   │   ├── fundamental_ratios.py    # P/E, P/B, P/C, EV/EBITDA calculations
 │   │   ├── financial_health.py      # Debt ratios, current ratio, etc.
-│   │   └── profitability.py         # ROE, ROA, margins
+│   │   ├── profitability.py         # ROE, ROIC, ROA, margins
+│   │   └── growth_metrics.py        # EPS growth rate, revenue growth rate
 │   ├── segmentation/                # Industry and size classification
 │   │   ├── __init__.py
 │   │   ├── industry_classifier.py   # GICS sector mapping
@@ -54,6 +76,11 @@ workfolder/
 │   │   ├── __init__.py
 │   │   ├── outlier_detector.py      # Sigma-based outlier identification
 │   │   └── screener.py              # Main screening logic
+│   ├── backtesting/                 # Backtesting and performance evaluation
+│   │   ├── __init__.py
+│   │   ├── forward_returns.py       # Calculate forward returns from analysis date
+│   │   ├── point_in_time.py         # Ensure no look-ahead bias in data
+│   │   └── performance_evaluator.py # Evaluate strategy performance over time
 │   └── utils/                       # Helper functions
 │       ├── __init__.py
 │       ├── config.py                # Configuration management
@@ -66,13 +93,14 @@ workfolder/
 │   └── fixtures/                    # Sample data for testing
 │       └── sample_financials.json
 ├── data/                            # Local data storage (gitignored)
-│   ├── raw/                         # Raw API responses
-│   └── processed/                   # Calculated metrics
+│   ├── raw/                         # Raw API responses (Parquet format)
+│   └── processed/                   # Calculated metrics (Parquet format)
 ├── notebooks/                       # Jupyter notebooks for exploration
 │   └── exploratory_analysis.ipynb
 ├── results/                         # Screening outputs (gitignored)
 │   └── screened_stocks.csv
 ├── main.py                          # Entry point for running analysis
+├── main_fetch.py                    # Entry point for fetching
 ├── .env.example                     # Example environment variables
 ├── .gitignore
 ├── requirements.txt                 # Python dependencies
@@ -85,53 +113,85 @@ workfolder/
 - `metrics/`: Pure calculation functions for financial ratios
 - `segmentation/`: Groups companies by industry and market cap
 - `screening/`: Statistical analysis to find outliers
-- `data/`: Local cache for API responses (add to .gitignore)
+- `data/`: Local cache for API responses stored as Parquet files (add to .gitignore)
 - `results/`: Output CSV files with screening results
+
+**Data Storage Format:**
+- All local data is stored in **Parquet format** for efficient storage and fast I/O with Polars
+- **Date-partitioned storage** for efficient querying by time period:
+  - SF1 fundamentals: `data/raw/sf1/sf1_YYYY.parquet` (e.g., `sf1_2020.parquet`, `sf1_2021.parquet`)
+  - SEP prices: `data/raw/sep/sep_YYYY.parquet`
+  - TICKERS metadata: `data/raw/tickers/tickers.parquet` (single file, updated as needed)
+- Processed metrics: `data/processed/*.parquet`
 
 ## Development Commands
 
 ### Setup
-```bash
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-```
+> Currently do not worry about setting up venv for the project.
 
 ### Running Analysis
 ```bash
-# Run full screening analysis
-python main.py
+#  Fetch the fundamental data over a date range
+#  This fetches ALL tickers available in Sharadar for the given time period
+python main_fetch.py --start-date 2018-01-01 --end-date 2023-12-31
 
-# Run specific screening strategy
-python main.py --strategy price_to_cash --sigma 2.0
+# Run screening analysis at a specific historical date
+python main.py --analysis-date 2020-01-15
 
-# Analyze specific sector
-python main.py --sector Technology --market-cap large
+# Run backtesting over a date range
+# The backtest does the analysis per rebalance frequency and collect the results together.
+python main.py --backtest --start-date 2018-01-01 --end-date 2023-12-31 --rebalance-frequency 1M
+
+# Run specific screening strategy with forward returns
+python main.py --strategy price_to_cash --sigma 2.0 --analysis-date 2020-01-15 --forward-periods 1M,3M,6M,1Y
+
+# Analyze specific sector with backtesting
+python main.py --sector Technology --market-cap large --backtest --start-date 2020-01-01 --end-date 2023-12-31
 ```
+The `--strategy` flag is required for `main.py`. `all` value is default for `--sector` and `--market-cap`.
+
+**Time Period Format:**
+- Use suffix notation for time periods (e.g., `1M`, `3M`, `6M`, `1Y`)
+- Format: `<number><unit>` where unit is:
+  - `M` = months (e.g., `10M` = 10 months)
+  - `Y` = years (e.g., `1Y` = 1 year)
+- Examples: `--forward-periods 1M,3M,6M,1Y` or `--rebalance-frequency 1M`
 
 ### Testing
-```bash
-# Run all tests
-pytest
-
-# Run specific test file
-pytest tests/test_metrics.py
-
-# Run with coverage
-pytest --cov=fundamental_analysis tests/
-```
+> Currently do not worry about testing.
 
 ## Data Sources
 
-**Primary Provider**: Tiingo API (https://api.tiingo.com/)
-- Free tier available with reasonable rate limits
-- Provides fundamental data endpoints
-- Requires API key (set as `TIINGO_API_KEY` environment variable)
+**Primary Provider**: Sharadar via NASDAQ Data Link (https://data.nasdaq.com/databases/SFA)
+- Comprehensive historical fundamental data for US stocks
+- High-quality, standardized fundamental metrics
+- Access via `nasdaq-data-link` Python library (preferred) or REST API
+- Requires API key (set as `NASDAQ_DATA_API_KEY` environment variable)
+- **Key Tables Used**:
+  - `SF1` (Core Fundamental Data): Quarterly/annual fundamentals with standardized metrics
+    - **Dimension**: Use **MRQ (Most Recent Quarterly)** for analysis
+    - Key date fields: `datekey` (reporting period end), `calendardate` (when data filed), `lastupdated`
+    - Use `calendardate` to ensure point-in-time correctness
+  - `TICKERS`: Ticker metadata including industry classification and market cap
+    - Fetch all available tickers, **excluding delisted companies**
+    - Filter out tickers where `isdelisted` field is True
+  - `SEP` (Equity Prices): Daily price data for calculating forward returns
+  - `DAILY` (Daily metrics): Alternative price source with additional metrics
+
+**Development Approach**:
+- Start with a small test set of tickers (~10-50 stocks) for faster iteration and debugging
+- Test point-in-time logic thoroughly with known historical dates
+- Validate forward returns calculations against known benchmarks
+- Scale to full universe after validating the pipeline
 
 ## Important Considerations
+
+**Point-in-Time Data Integrity**:
+- **Critical for backtesting**: Only use data available at the analysis date to avoid look-ahead bias
+- Use `calendardate` field from SF1 to determine when fundamental data was actually available
+- Be aware of reporting lags: fundamental data is typically available weeks/months after quarter end
+- Consider implementing a lag period (e.g., 45-90 days) after quarter end before using data
+- Price data must be from the analysis date or before for ratio calculations
 
 **Industry Classification**: Use standard classification systems (GICS, SIC, or NAICS) for proper peer comparison. Different industries have different normal ranges for ratios (e.g., tech companies typically have higher P/E ratios).
 
