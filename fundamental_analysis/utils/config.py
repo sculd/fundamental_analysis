@@ -34,6 +34,10 @@ class Config:
     # SF1 dimension (MRQ = Most Recent Quarterly)
     SF1_DIMENSION = "MRQ"
 
+    # Point-in-time reporting delay
+    # Average days after quarter end before financial reports are filed
+    REPORTING_DELAY_DAYS = 45  # Conservative estimate (can be 45-90 days)
+
     # API settings
     BULK_DOWNLOAD_URL = "https://data.nasdaq.com/api/v3/datatables"
     MAX_RETRIES = 3

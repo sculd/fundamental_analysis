@@ -124,16 +124,19 @@ workfolder/
 - All local data is stored in **Parquet format** for efficient storage and fast I/O with Polars
 - **Quarterly-partitioned storage** for SF1 (fundamentals are quarterly):
   - SF1 fundamentals: `data/raw/sf1/sf1_YYYYQN.parquet` (e.g., `sf1_2023Q1.parquet`, `sf1_2023Q2.parquet`)
-  - Each file contains all tickers for that specific quarter (~4,700-5,000 records, ~1.5MB per quarter)
-- **Year-partitioned storage** for SEP (daily price data):
-  - SEP prices: `data/raw/sep/sep_YYYY.parquet` (e.g., `sep_2023.parquet`)
+  - Partitioned by `datekey` (reporting quarter), fetched by `calendardate` (filing/quarter-end date)
+  - Each file contains all tickers for that specific reporting quarter (~4,700-5,000 records, ~1.5MB per quarter)
+  - Incremental fetch: Only downloads new quarters not already on disk (unless using `--overwrite`)
+- **Daily-partitioned storage** for SEP (daily price data):
+  - SEP prices: `data/raw/sep/sep_YYYY-MM-DD.parquet` (e.g., `sep_2025-01-06.parquet`, `sep_2025-01-07.parquet`)
   - Contains OHLCV data (Open, High, Low, Close, Volume) plus adjusted close prices
-  - Each file contains all tickers for that year (~2.2M records per year, ~26MB per year)
+  - Each file contains all tickers for that specific trading day (~6,000 records per day, ~170KB per day)
+  - Daily partitioning ensures filename accurately reflects data content (no partial month confusion)
 - **Dated TICKERS metadata**: `data/raw/tickers/tickers_YYYY-MM-DD.parquet`
   - Filename includes fetch date since the table is a snapshot that updates over time
   - Example: `tickers_2025-10-31.parquet` (17,331 tickers, 699KB)
 - **Processed metrics**: `data/processed/*.parquet`
-- **Overwrite behavior**: Use `--overwrite` flag to re-download existing files, otherwise skips existing quarters/years/dates
+- **Overwrite behavior**: Use `--overwrite` flag to re-download existing files, otherwise skips existing quarters/days/dates
 
 ## Development Commands
 
@@ -207,9 +210,16 @@ The `--strategy` flag is required for `main.py`. `all` value is default for `--s
 
 **Point-in-Time Data Integrity**:
 - **Critical for backtesting**: Only use data available at the analysis date to avoid look-ahead bias
-- Use `calendardate` field from SF1 to determine when fundamental data was actually available
-- Be aware of reporting lags: fundamental data is typically available weeks/months after quarter end
-- Consider implementing a lag period (e.g., 45-90 days) after quarter end before using data
+- **Sharadar data limitation**: For MRQ dimension, `calendardate` equals `datekey` (quarter end date), NOT the actual SEC filing date
+  - Companies typically file 45-90 days after quarter end, but Sharadar doesn't preserve this timing
+  - `lastupdated` shows when Sharadar updated the record (often recent), not the original filing date
+  - This means some look-ahead bias exists: we assume data is available immediately at quarter end
+- **Restatement limitation**: Sharadar only keeps current/restated values, not original as-filed numbers
+  - Historical data reflects the most recent restatements/corrections
+  - This introduces slight optimism bias in backtesting (restated numbers are more accurate)
+- **Our implementation**: Fetch where `calendardate <= analysis_date`, partition by `datekey` (reporting quarter)
+  - For analysis on April 16th, fetches Q1 data (calendardate = March 31st)
+  - Best possible with available data, though not perfect point-in-time
 - Price data must be from the analysis date or before for ratio calculations
 
 **Industry Classification**: Use standard classification systems (GICS, SIC, or NAICS) for proper peer comparison. Different industries have different normal ranges for ratios (e.g., tech companies typically have higher P/E ratios).
