@@ -1,5 +1,6 @@
 """Data fetcher orchestration for downloading and saving Sharadar data."""
 
+import re
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -54,8 +55,6 @@ class DataFetcher:
         Intelligently fetches only missing quarters. If existing quarters found, only fetches
         from the most recent quarter forward. Use --overwrite to re-fetch all quarters.
         """
-        import re
-        from datetime import datetime, timedelta
 
         end_dt = datetime.strptime(end_date, "%Y-%m-%d")
         adjusted_end_dt = end_dt - timedelta(days=Config.REPORTING_DELAY_DAYS)

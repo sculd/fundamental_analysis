@@ -4,25 +4,38 @@ Guidance to Claude Code (claude.ai/code).
 
 ## Project Overview
 
-A Python-based fundamental analysis system for screening stocks based on financial metrics. The primary goal is to identify companies whose fundamental metrics have statistical outlier values, meaning they are potentially over/undervalued companies (e.g., price-to-cash, P/E, P/B) against industry peers against industry peers.
+A Python-based fundamental analysis system for screening stocks based on financial metrics. The primary goal is to identify companies whose fundamental metrics have statistical outlier values, meaning they are potentially over/undervalued companies (e.g., price-to-cash, P/E, P/B) against industry peers.
+The system should be capable of running backtest.
 
 **Core Methodology:**
 - Fetch historical fundamental data from Sharadar (NASDAQ Data Link)
-- Perform point-in-time analysis: analyze at a given date using only data available before that date
-- Calculate key fundamental ratios for all companies at each analysis date
-  - Only use ratios (not absolute values) to normalize the metrics.
+- Perform point-in-time analysis: analyze at a given date using only data available within a rolling window before that date. 
+- Calculate key fundamental ratios for all companies at a given date
+  - Only use fundamental ratios (not absolute values) to normalize the metrics.
 - Segment companies by industry (GICS sectors) and market cap and potentially by other dimensions.
-  - This logic needs to be abstracted so that the expansion can be made.
-- Compute statistical distributions (mean, std dev) within each segment
-- Identify outliers (e.g., companies > 2 sigma from segment mean)
+  - The segmentation logic needs to be abstracted so that the expansion can be made.
+  - The segmentation is defined as function that translates a stock to a string (segment).
+  - A number of segmentation will be allowed, and each segmentation is registered with registry logic.
+    - Here registry means annotation with str argument, e.g. @segmentation("sector_cap"), example:
+```python
+  @segmentation("sector_cap")
+  def sector_market_cap_segmentation(ticker_data):
+      # assuming ticker_data has `sector` and `cap_bucket` attributes.
+      return f"{ticker_data.sector}_{ticker_data.cap_bucket}"
+```
+- Compute statistical distributions (mean, std dev) within each segment.
+- Get Outliers within segmentation 
+  - There might be a number of ways to get the outliers. Each outlier finding logic needs to be registered with registry logic (python annotation with str arg).
+  - Outliers may be companies with value off > 2 sigma from mean
+  - Outliers may be companies with value > 2 times mean
 - Calculate forward returns from analysis date for backtesting performance
-- Start with fetch logic, fetch the data for a good large period (e.g. 5 years from 2019 to 2024) of time, then work with the fetched local data.
-- Use Polars instead of Pandas for multithreading speed-up.
+- Use Polars instead of Pandas for analysis calculations for multithreading speed-up.
+- Using pandas for lightweight task such as data fetching etc. is fine.
 - Leave __init__.py mostly empty unless necessary. Avoid using __all__ in the __init__.py.
-- I do not want the code be verbose. Refrain from adding meaningless, trivial comment. 
-  - It is best if the meaning of variable can be understood from its name.
+- I do not want the code be verbose. Refrain from adding non-informative, trivial comment. 
+  - It is the best if the meaning of variable can be understood from its name without redundant comment.
   - Do not make the doc string to be absolutely formal. Follow the format, but do not add args, return, unless necessary.
-  - If the args and return values are obvious, omit it.
+    - If the args and return values are obvious, omit it in the doc string.
 
 **Key Design Principles:**
 - **No Look-Ahead Bias**: Only use data that would have been available at the analysis date
@@ -45,16 +58,24 @@ A Python-based fundamental analysis system for screening stocks based on financi
 7. **Screening/Reporting**: Output undervalued candidates with supporting metrics and forward returns
 
 **Key Metrics to Calculate:**
-- Price-to-Cash ratio
-- Price-to-Book (P/B)
-- Price-to-Earnings (P/E)
-- Debt-to-Equity
-- Current Ratio
+
+Positive (higher is better) metrics
 - Return on Equity (ROE)
 - Return on Invested Capital (ROIC)
 - Earnings per Share (EPS) Growth Rate
 - Revenue Growth Rate
+- Current Ratio
+
+Negative (lower is better) metrics
+- Price-to-Cash ratio
+- Price-to-Book (P/B)
+- Price-to-Earnings (P/E)
+- Debt-to-Equity
 - EV/EBITDA Ratio
+
+Note:
+- **EV/EBITDA Ratio** *(low = good, high = bad; sector-dependent)*
+- **Current Ratio** *(too high can indicate inefficient asset use)*
 
 ## Project Structure
 
@@ -74,11 +95,14 @@ workfolder/
 │   │   └── growth_metrics.py        # EPS growth rate, revenue growth rate
 │   ├── segmentation/                # Industry and size classification
 │   │   ├── __init__.py
+│   │   ├── registry.py              # segmentation registry
 │   │   ├── industry_classifier.py   # GICS sector mapping
 │   │   └── market_cap_classifier.py # Size bucket assignment
 │   ├── screening/                   # Statistical analysis and outlier detection
 │   │   ├── __init__.py
-│   │   ├── outlier_detector.py      # Sigma-based outlier identification
+│   │   ├── registry.py              # screening registry
+│   │   ├── sigma.py                 # Sigma-based outlier identification
+│   │   ├── value_to_mean.py         # value to mean ratio based outlier identification
 │   │   └── screener.py              # Main screening logic
 │   ├── backtesting/                 # Backtesting and performance evaluation
 │   │   ├── __init__.py
