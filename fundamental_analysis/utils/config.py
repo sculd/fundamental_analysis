@@ -32,12 +32,14 @@ class Config:
     SHARADAR_SEP = "SHARADAR/SEP"
     SHARADAR_TICKERS = "SHARADAR/TICKERS"
 
-    # SF1 dimension (MRQ = Most Recent Quarterly)
-    SF1_DIMENSION = "MRQ"
+    # SF1 dimension (ARQ = As Reported Quarterly, MRQ = Most Recent Quarterly)
+    SF1_DIMENSION = "ARQ"
 
     # Point-in-time reporting delay
-    # Average days after quarter end before financial reports are filed
-    REPORTING_DELAY_DAYS = 45  # Conservative estimate (can be 45-90 days)
+    # Median days between reportperiod and datekey (when data becomes available)
+    # Median: 44 days | P75: 58 days | P90: 89 days | P95: 93 days
+    # Note: Individual companies vary widely (some >100 days for late filings/restatements)
+    REPORTING_DELAY_DAYS = 45
 
     # API settings
     BULK_DOWNLOAD_URL = "https://data.nasdaq.com/api/v3/datatables"

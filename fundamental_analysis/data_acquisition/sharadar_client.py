@@ -28,7 +28,7 @@ class SharadarClient:
         nasdaqdatalink.ApiConfig.api_key = self.api_key
         logger.info("SharadarClient initialized")
 
-    def fetch_tickers(self, exclude_delisted: bool = True) -> pl.DataFrame:
+    def fetch_tickers(self, exclude_delisted: bool = False) -> pl.DataFrame:
         """Fetch ticker metadata, optionally excluding delisted companies."""
         logger.info("Fetching TICKERS table...")
 
