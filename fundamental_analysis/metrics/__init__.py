@@ -2,18 +2,13 @@
 
 import polars as pl
 
-from fundamental_analysis.metrics.financial_health import (
-    get_financial_health_expressions,
-)
-from fundamental_analysis.metrics.fundamental_ratios import (
-    get_fundamental_ratio_expressions,
-)
-from fundamental_analysis.metrics.growth_metrics import (
-    get_growth_expressions,
-)
-from fundamental_analysis.metrics.profitability import (
-    get_profitability_expressions,
-)
+from fundamental_analysis.metrics.financial_health import \
+    get_financial_health_expressions
+from fundamental_analysis.metrics.fundamental_ratios import \
+    get_fundamental_ratio_expressions
+from fundamental_analysis.metrics.growth_metrics import get_growth_expressions
+from fundamental_analysis.metrics.profitability import \
+    get_profitability_expressions
 
 
 def calculate_all_metrics(df: pl.DataFrame) -> pl.DataFrame:
