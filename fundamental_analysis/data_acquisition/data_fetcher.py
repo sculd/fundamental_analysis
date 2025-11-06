@@ -10,7 +10,7 @@ from fundamental_analysis.data_acquisition.sharadar_client import \
 from fundamental_analysis.utils.config import Config
 from fundamental_analysis.utils.logger import setup_logger
 
-_FETCH_START_DATE = "1990-01-01"
+_FETCH_START_DATE = "1998-01-01"
 logger = setup_logger(__name__)
 
 
@@ -23,13 +23,13 @@ class DataFetcher:
 
     def fetch_and_save_tickers(
         self,
+        end_date: str,
         overwrite: bool = False
     ) -> pl.DataFrame:
-        """Fetch and save ticker metadata with today's date in filename."""
+        """Fetch and save ticker metadata with end_date in filename."""
         logger.info("Fetching and saving TICKERS data...")
 
-        today = datetime.now().strftime("%Y-%m-%d")
-        output_path = Config.TICKERS_DIR / f"tickers_{today}.parquet"
+        output_path = Config.TICKERS_DIR / f"tickers_{end_date}.parquet"
 
         if output_path.exists() and not overwrite:
             logger.info(f"File {output_path} already exists. Skipping (use --overwrite to replace).")
@@ -184,6 +184,7 @@ class DataFetcher:
         logger.info(f"Starting full data fetch up to {end_date}")
 
         df_tickers = self.fetch_and_save_tickers(
+            end_date=end_date,
             overwrite=overwrite
         )
         active_tickers = df_tickers["ticker"].to_list()

@@ -17,21 +17,19 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--end-date",
+        type=str,
+        required=True,
+        help="End date in YYYY-MM-DD format (e.g., 2023-12-31)",
+    )
+
+    parser.add_argument(
         "--overwrite",
         action="store_true",
         help="Overwrite existing files (default: skip existing files)",
     )
 
     return parser.parse_args()
-
-
-def validate_date(date_str: str) -> bool:
-    """Validate date string is in YYYY-MM-DD format."""
-    try:
-        datetime.strptime(date_str, "%Y-%m-%d")
-        return True
-    except ValueError:
-        return False
 
 
 def main():

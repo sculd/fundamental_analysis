@@ -129,22 +129,3 @@ class SharadarClient:
         except Exception as e:
             logger.error(f"Error fetching SEP data: {e}")
             raise
-
-    def fetch_with_retry(
-        self, fetch_func, max_retries: int = Config.MAX_RETRIES, **kwargs
-    ):
-        """Execute fetch function with exponential backoff retry logic."""
-        for attempt in range(max_retries):
-            try:
-                return fetch_func(**kwargs)
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    wait_time = Config.RETRY_DELAY * (2 ** attempt)
-                    logger.warning(
-                        f"Attempt {attempt + 1} failed: {e}. "
-                        f"Retrying in {wait_time}s..."
-                    )
-                    time.sleep(wait_time)
-                else:
-                    logger.error(f"All {max_retries} attempts failed")
-                    raise
