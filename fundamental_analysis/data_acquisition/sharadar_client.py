@@ -1,6 +1,5 @@
 """Sharadar API client for fetching financial data from NASDAQ Data Link."""
 
-import time
 from typing import Optional
 
 import nasdaqdatalink

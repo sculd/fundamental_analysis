@@ -2,7 +2,6 @@
 
 import argparse
 import sys
-from datetime import datetime
 
 from fundamental_analysis.data_acquisition.data_fetcher import DataFetcher
 from fundamental_analysis.utils.logger import setup_logger

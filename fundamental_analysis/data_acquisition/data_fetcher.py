@@ -29,7 +29,7 @@ class DataFetcher:
         """Fetch and save ticker metadata with end_date in filename."""
         logger.info("Fetching and saving TICKERS data...")
 
-        output_path = Config.TICKERS_DIR / f"tickers_{end_date}.parquet"
+        output_path = Config.TICKERS_DIR / f"tickers_snapshot_{end_date}.parquet"
 
         if output_path.exists() and not overwrite:
             logger.info(f"File {output_path} already exists. Skipping (use --overwrite to replace).")
