@@ -62,20 +62,28 @@ The system should be capable of running backtest.
 Positive (higher is better) metrics
 - Return on Equity (ROE)
 - Return on Invested Capital (ROIC)
-- Earnings per Share (EPS) Growth Rate
-- Revenue Growth Rate
+- Earnings per Share (EPS) Growth Rate (QoQ and YoY)
+- Revenue Growth Rate (QoQ and YoY)
 - Current Ratio
+- Interest Coverage
 
 Negative (lower is better) metrics
 - Price-to-Cash ratio
 - Price-to-Book (P/B)
 - Price-to-Earnings (P/E)
+- Price-to-Sales (P/S)
 - Debt-to-Equity
+- Debt-to-Assets
 - EV/EBITDA Ratio
 
 Note:
+- **Growth Metrics**: Both Quarter-over-Quarter (QoQ) and Year-over-Year (YoY) growth rates are calculated
+  - QoQ: Compares to previous quarter (immediate trends)
+  - YoY: Compares to same quarter last year (seasonal adjustment)
 - **EV/EBITDA Ratio** *(low = good, high = bad; sector-dependent)*
 - **Current Ratio** *(too high can indicate inefficient asset use)*
+- **P/S Ratio** *(useful for unprofitable companies where P/E is meaningless)*
+- **Interest Coverage** *(EBIT/Interest Expense; measures ability to service debt)*
 
 ## Project Structure
 
