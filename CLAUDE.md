@@ -80,12 +80,18 @@ The system should be capable of running backtest.
 - (+) EPS Growth Rate (QoQ and YoY)
 - (+) Revenue Growth Rate (QoQ and YoY)
 
-Note:
+**Temporal Features:**
+- **All metrics include temporal growth features** (`*_growth_qoq` and `*_growth_yoy`)
+  - **QoQ (Quarter-over-Quarter)**: Compares to previous quarter (shift=1) - captures immediate trends
+  - **YoY (Year-over-Year)**: Compares to same quarter last year (shift=4) - captures seasonal-adjusted trends
+- **Implementation details** (abstracted from user):
+  - Fundamental ratios: Growth = absolute change (delta) - e.g., P/E change from 20 to 25 = +5
+  - Other metrics: Growth = percentage change - e.g., ROE change from 10% to 12% = +20%
+- **Total features**: 11 snapshot values + 26 temporal features = 37 features
+
+**Notes:**
 - **(+)** = Higher is better
 - **(-)** = Lower is better
-- **Growth Metrics**: Both Quarter-over-Quarter (QoQ) and Year-over-Year (YoY) growth rates are calculated
-  - QoQ: Compares to previous quarter (immediate trends)
-  - YoY: Compares to same quarter last year (seasonal adjustment)
 - **EV/EBITDA Ratio** *(lower = better valuation; sector-dependent)*
 - **Current Ratio** *(>1.5 is healthy, but too high can indicate inefficient asset use)*
 - **P/S Ratio** *(useful for unprofitable companies where P/E is meaningless)*
@@ -103,10 +109,11 @@ workfolder/
 │   │   └── data_fetcher.py          # Unified interface for data sources
 │   ├── metrics/                     # Financial ratio calculations
 │   │   ├── __init__.py
-│   │   ├── fundamental_ratios.py    # P/E, P/B, P/C, EV/EBITDA calculations
-│   │   ├── financial_health.py      # Debt ratios, current ratio, etc.
-│   │   ├── profitability.py         # ROE, ROIC, ROA, margins
-│   │   └── growth_metrics.py        # EPS growth rate, revenue growth rate
+│   │   ├── orchestrator.py          # Coordinates all metric calculations
+│   │   ├── fundamental_ratios.py    # P/E, P/B, P/S, P/C, EV/EBITDA + growth (QoQ/YoY)
+│   │   ├── financial_health.py      # Debt ratios, current ratio, interest coverage + growth
+│   │   ├── profitability.py         # ROE, ROIC + growth (QoQ/YoY)
+│   │   └── growth_metrics.py        # EPS growth rate, revenue growth rate (QoQ/YoY)
 │   ├── segmentation/                # Industry and size classification
 │   │   ├── __init__.py
 │   │   ├── registry.py              # segmentation registry

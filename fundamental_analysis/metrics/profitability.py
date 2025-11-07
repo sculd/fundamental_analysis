@@ -18,6 +18,20 @@ def _roe_expr() -> pl.Expr:
     ).otherwise(None)
 
 
+def _roe_growth_expr(shift: int) -> pl.Expr:
+    """
+    ROE growth rate (percentage change). Use shift=1 for QoQ, shift=4 for YoY.
+
+    Returns null when previous value is 0 or when crossing zero to avoid misleading values.
+    """
+    current = _roe_expr()
+    previous = _roe_expr().shift(shift).over("ticker", order_by="reportperiod")
+
+    return pl.when((previous != 0) & (current * previous > 0)).then(
+        (current - previous) / previous.abs()
+    ).otherwise(None)
+
+
 def _roic_expr() -> pl.Expr:
     """
     Return on Invested Capital (ROIC): NOPAT / invested capital.
@@ -50,13 +64,35 @@ def _roic_expr() -> pl.Expr:
     ).otherwise(None)
 
 
+def _roic_growth_expr(shift: int) -> pl.Expr:
+    """
+    ROIC growth rate (percentage change). Use shift=1 for QoQ, shift=4 for YoY.
+
+    Returns null when previous value is 0 or when crossing zero to avoid misleading values.
+    """
+    current = _roic_expr()
+    previous = _roic_expr().shift(shift).over("ticker", order_by="reportperiod")
+
+    return pl.when((previous != 0) & (current * previous > 0)).then(
+        (current - previous) / previous.abs()
+    ).otherwise(None)
+
+
 def get_profitability_expressions() -> list[pl.Expr]:
     """
     Return list of profitability metric expressions for composing with other metrics.
 
     Use this for efficient batch calculation with other metric types.
+
+    Includes snapshot values and temporal features (growth QoQ/YoY).
     """
     return [
+        # Snapshot values
         _roe_expr().alias("roe_calculated"),
         _roic_expr().alias("roic_calculated"),
+        # Temporal features (growth - percentage change)
+        _roe_growth_expr(shift=1).alias("roe_calculated_growth_qoq"),
+        _roe_growth_expr(shift=4).alias("roe_calculated_growth_yoy"),
+        _roic_growth_expr(shift=1).alias("roic_calculated_growth_qoq"),
+        _roic_growth_expr(shift=4).alias("roic_calculated_growth_yoy"),
     ]
