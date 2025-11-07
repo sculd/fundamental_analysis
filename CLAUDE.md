@@ -59,31 +59,37 @@ The system should be capable of running backtest.
 
 **Key Metrics to Calculate:**
 
-Positive (higher is better) metrics
-- Return on Equity (ROE)
-- Return on Invested Capital (ROIC)
-- Earnings per Share (EPS) Growth Rate (QoQ and YoY)
-- Revenue Growth Rate (QoQ and YoY)
-- Current Ratio
-- Interest Coverage
+**Fundamental Ratios (Valuation) - Lower is Better:**
+- (-) Price-to-Earnings (P/E)
+- (-) Price-to-Book (P/B)
+- (-) Price-to-Sales (P/S)
+- (-) Price-to-Cash (P/C)
+- (-) EV/EBITDA Ratio
 
-Negative (lower is better) metrics
-- Price-to-Cash ratio
-- Price-to-Book (P/B)
-- Price-to-Earnings (P/E)
-- Price-to-Sales (P/S)
-- Debt-to-Equity
-- Debt-to-Assets
-- EV/EBITDA Ratio
+**Financial Health (Leverage & Liquidity):**
+- (-) Debt-to-Equity
+- (-) Debt-to-Assets
+- (+) Current Ratio
+- (+) Interest Coverage
+
+**Profitability - Higher is Better:**
+- (+) Return on Equity (ROE)
+- (+) Return on Invested Capital (ROIC)
+
+**Growth Metrics - Higher is Better:**
+- (+) EPS Growth Rate (QoQ and YoY)
+- (+) Revenue Growth Rate (QoQ and YoY)
 
 Note:
+- **(+)** = Higher is better
+- **(-)** = Lower is better
 - **Growth Metrics**: Both Quarter-over-Quarter (QoQ) and Year-over-Year (YoY) growth rates are calculated
   - QoQ: Compares to previous quarter (immediate trends)
   - YoY: Compares to same quarter last year (seasonal adjustment)
-- **EV/EBITDA Ratio** *(low = good, high = bad; sector-dependent)*
-- **Current Ratio** *(too high can indicate inefficient asset use)*
+- **EV/EBITDA Ratio** *(lower = better valuation; sector-dependent)*
+- **Current Ratio** *(>1.5 is healthy, but too high can indicate inefficient asset use)*
 - **P/S Ratio** *(useful for unprofitable companies where P/E is meaningless)*
-- **Interest Coverage** *(EBIT/Interest Expense; measures ability to service debt)*
+- **Interest Coverage** *(EBIT/Interest Expense; >3.0 indicates healthy ability to service debt)*
 
 ## Project Structure
 

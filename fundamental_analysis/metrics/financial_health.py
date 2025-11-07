@@ -10,17 +10,17 @@ def _debt_to_equity_expr() -> pl.Expr:
     ).otherwise(None)
 
 
-def _current_ratio_expr() -> pl.Expr:
-    """Current Ratio: current assets / current liabilities."""
-    return pl.when(pl.col("liabilitiesc") != 0).then(
-        pl.col("assetsc") / pl.col("liabilitiesc")
-    ).otherwise(None)
-
-
 def _debt_to_assets_expr() -> pl.Expr:
     """Debt-to-Assets ratio: total debt / total assets."""
     return pl.when(pl.col("assets") != 0).then(
         pl.col("debt") / pl.col("assets")
+    ).otherwise(None)
+
+
+def _current_ratio_expr() -> pl.Expr:
+    """Current Ratio: current assets / current liabilities."""
+    return pl.when(pl.col("liabilitiesc") != 0).then(
+        pl.col("assetsc") / pl.col("liabilitiesc")
     ).otherwise(None)
 
 
