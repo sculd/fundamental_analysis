@@ -2,6 +2,8 @@
 
 import polars as pl
 
+from fundamental_analysis.metrics.temporal_utils import temporal_change
+
 
 def _roe_expr() -> pl.Expr:
     """
@@ -15,20 +17,6 @@ def _roe_expr() -> pl.Expr:
     """
     return pl.when(pl.col("equity") != 0).then(
         pl.col("netinccmn") / pl.col("equity")
-    ).otherwise(None)
-
-
-def _roe_growth_expr(shift: int) -> pl.Expr:
-    """
-    ROE growth rate (percentage change). Use shift=1 for QoQ, shift=4 for YoY.
-
-    Returns null when previous value is 0 or when crossing zero to avoid misleading values.
-    """
-    current = _roe_expr()
-    previous = _roe_expr().shift(shift).over("ticker", order_by="reportperiod")
-
-    return pl.when((previous != 0) & (current * previous > 0)).then(
-        (current - previous) / previous.abs()
     ).otherwise(None)
 
 
@@ -64,20 +52,6 @@ def _roic_expr() -> pl.Expr:
     ).otherwise(None)
 
 
-def _roic_growth_expr(shift: int) -> pl.Expr:
-    """
-    ROIC growth rate (percentage change). Use shift=1 for QoQ, shift=4 for YoY.
-
-    Returns null when previous value is 0 or when crossing zero to avoid misleading values.
-    """
-    current = _roic_expr()
-    previous = _roic_expr().shift(shift).over("ticker", order_by="reportperiod")
-
-    return pl.when((previous != 0) & (current * previous > 0)).then(
-        (current - previous) / previous.abs()
-    ).otherwise(None)
-
-
 def get_profitability_expressions() -> list[pl.Expr]:
     """
     Return list of profitability metric expressions for composing with other metrics.
@@ -91,8 +65,8 @@ def get_profitability_expressions() -> list[pl.Expr]:
         _roe_expr().alias("roe_calculated"),
         _roic_expr().alias("roic_calculated"),
         # Temporal features (growth - percentage change)
-        _roe_growth_expr(shift=1).alias("roe_calculated_growth_qoq"),
-        _roe_growth_expr(shift=4).alias("roe_calculated_growth_yoy"),
-        _roic_growth_expr(shift=1).alias("roic_calculated_growth_qoq"),
-        _roic_growth_expr(shift=4).alias("roic_calculated_growth_yoy"),
+        temporal_change(_roe_expr(), 1, check_sign_crossing=True).alias("roe_calculated_growth_qoq"),
+        temporal_change(_roe_expr(), 4, check_sign_crossing=True).alias("roe_calculated_growth_yoy"),
+        temporal_change(_roic_expr(), 1, check_sign_crossing=True).alias("roic_calculated_growth_qoq"),
+        temporal_change(_roic_expr(), 4, check_sign_crossing=True).alias("roic_calculated_growth_yoy"),
     ]
