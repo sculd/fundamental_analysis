@@ -59,6 +59,12 @@ The system should be capable of running backtest.
 
 **Key Metrics to Calculate:**
 
+**Size Features (Company Scale):**
+- Market Capitalization (raw value + growth QoQ/YoY)
+- Revenue (raw value + growth QoQ/YoY)
+- Total Assets (raw value + growth QoQ/YoY)
+- Note: Raw values will be normalized via sector-based t-score in preprocessing
+
 **Fundamental Ratios (Valuation) - Lower is Better:**
 - (-) Price-to-Earnings (P/E)
 - (-) Price-to-Book (P/B)
@@ -76,9 +82,8 @@ The system should be capable of running backtest.
 - (+) Return on Equity (ROE)
 - (+) Return on Invested Capital (ROIC)
 
-**Growth Metrics - Higher is Better:**
+**Earnings Metrics - Higher is Better:**
 - (+) EPS Growth Rate (QoQ and YoY)
-- (+) Revenue Growth Rate (QoQ and YoY)
 
 **Temporal Features:**
 - **All metrics include temporal growth features** (`*_growth_qoq` and `*_growth_yoy`)
@@ -87,7 +92,7 @@ The system should be capable of running backtest.
 - **Implementation details** (abstracted from user):
   - Fundamental ratios: Growth = absolute change (delta) - e.g., P/E change from 20 to 25 = +5
   - Other metrics: Growth = percentage change - e.g., ROE change from 10% to 12% = +20%
-- **Total features**: 11 snapshot values + 26 temporal features = 37 features
+- **Total features**: 3 size (raw) + 11 snapshot values + 30 temporal features = 44 features
 
 **Notes:**
 - **(+)** = Higher is better
@@ -108,12 +113,12 @@ workfolder/
 │   │   ├── sharadar_client.py       # Sharadar/NASDAQ Data Link integration
 │   │   └── data_fetcher.py          # Unified interface for data sources
 │   ├── metrics/                     # Financial ratio calculations
-│   │   ├── __init__.py
-│   │   ├── orchestrator.py          # Coordinates all metric calculations
+│   │   ├── __init__.py              # Orchestrator - coordinates all metric calculations
+│   │   ├── size_features.py         # Company size: marketcap, revenue, assets + growth (QoQ/YoY)
 │   │   ├── fundamental_ratios.py    # P/E, P/B, P/S, P/C, EV/EBITDA + growth (QoQ/YoY)
 │   │   ├── financial_health.py      # Debt ratios, current ratio, interest coverage + growth
 │   │   ├── profitability.py         # ROE, ROIC + growth (QoQ/YoY)
-│   │   └── growth_metrics.py        # EPS growth rate, revenue growth rate (QoQ/YoY)
+│   │   └── earnings_metrics.py      # EPS growth rate (QoQ/YoY)
 │   ├── segmentation/                # Industry and size classification
 │   │   ├── __init__.py
 │   │   ├── registry.py              # segmentation registry

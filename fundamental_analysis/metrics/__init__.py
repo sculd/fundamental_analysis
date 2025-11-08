@@ -2,13 +2,21 @@
 
 import polars as pl
 
+from fundamental_analysis.metrics.earnings_metrics import \
+    get_earnings_expressions
 from fundamental_analysis.metrics.financial_health import \
     get_financial_health_expressions
 from fundamental_analysis.metrics.fundamental_ratios import \
     get_fundamental_ratio_expressions
-from fundamental_analysis.metrics.growth_metrics import get_growth_expressions
 from fundamental_analysis.metrics.profitability import \
     get_profitability_expressions
+from fundamental_analysis.metrics.size_features import (
+    SIZE_FEATURE_RAW_COLUMNS,
+    get_size_feature_expressions,
+)
+
+# Identifiers to keep from SF1 data
+IDENTIFIER_COLUMNS = ["ticker", "reportperiod", "datekey", "calendardate"]
 
 
 def calculate_all_metrics(df: pl.DataFrame) -> pl.DataFrame:
@@ -16,18 +24,39 @@ def calculate_all_metrics(df: pl.DataFrame) -> pl.DataFrame:
     Calculate all available metrics in single pass.
 
     Metrics included:
-    - Fundamental ratios (P/E, P/B, P/S, P/C, EV/EBITDA)
-    - Financial health (debt-to-equity, current ratio, debt-to-assets, interest coverage)
-    - Profitability (ROE, ROIC)
-    - Growth (EPS growth QoQ/YoY, Revenue growth QoQ/YoY)
+    - Size features (marketcap, revenue, assets + growth QoQ/YoY)
+    - Fundamental ratios (P/E, P/B, P/S, P/C, EV/EBITDA + growth QoQ/YoY)
+    - Financial health (debt-to-equity, current ratio, debt-to-assets, interest coverage + growth QoQ/YoY)
+    - Profitability (ROE, ROIC + growth QoQ/YoY)
+    - Earnings (EPS growth QoQ/YoY)
 
     All calculations happen in a single pass for maximum efficiency.
 
+    Returns DataFrame with ONLY identifiers and calculated metrics.
+    All original SF1 columns are dropped after calculation.
+
     Note: Growth metrics require time-series data with multiple periods per ticker.
+    Note: Normalization (e.g., sector-based t-score) should be applied in preprocessing.
     """
-    return df.with_columns(
+    # Calculate all metrics
+    df_with_metrics = df.with_columns(
+        get_size_feature_expressions() +
         get_fundamental_ratio_expressions() +
         get_financial_health_expressions() +
         get_profitability_expressions() +
-        get_growth_expressions()
+        get_earnings_expressions()
+    )
+
+    # Get list of all calculated metric columns (new columns not in original)
+    metric_columns = [
+        col for col in df_with_metrics.columns
+        if col not in df.columns
+    ]
+
+    # Select: identifiers + size features (raw) + calculated metrics
+    # Note: SIZE_FEATURE_RAW_COLUMNS must be explicitly included since they exist in input df
+    return df_with_metrics.select(
+        IDENTIFIER_COLUMNS +
+        SIZE_FEATURE_RAW_COLUMNS +
+        metric_columns
     )
