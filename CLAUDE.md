@@ -60,7 +60,8 @@ The system should be capable of running backtest.
 **Key Metrics to Calculate:**
 
 **Size Features (Company Scale):**
-- Market Capitalization (raw value + growth QoQ/YoY)
+- Market Capitalization (raw value + growth QoQ/YoY + category)
+  - Category: mega (>$200B), large ($10B-$200B), mid ($2B-$10B), small ($300M-$2B), micro (<$300M)
 - Revenue (raw value + growth QoQ/YoY)
 - Total Assets (raw value + growth QoQ/YoY)
 - Note: Raw values will be normalized via sector-based t-score in preprocessing
@@ -92,7 +93,7 @@ The system should be capable of running backtest.
 - **Implementation details** (abstracted from user):
   - Fundamental ratios: Growth = absolute change (delta) - e.g., P/E change from 20 to 25 = +5
   - Other metrics: Growth = percentage change - e.g., ROE change from 10% to 12% = +20%
-- **Total features**: 3 size (raw) + 11 snapshot values + 30 temporal features = 44 features
+- **Total features**: 3 size (raw) + 1 categorical + 11 snapshot values + 30 temporal features = 45 features
 
 **Notes:**
 - **(+)** = Higher is better
@@ -302,7 +303,7 @@ The `--strategy` flag is required for `main.py`. `all` value is default for `--s
 
 **Industry Classification**: Use standard classification systems (GICS, SIC, or NAICS) for proper peer comparison. Different industries have different normal ranges for ratios (e.g., tech companies typically have higher P/E ratios).
 
-**Market Cap Segmentation**: Common buckets are:
+**Market Cap Segmentation**: Automatically calculated as `marketcap_category` feature with standard buckets:
 - Mega cap: > $200B
 - Large cap: $10B - $200B
 - Mid cap: $2B - $10B

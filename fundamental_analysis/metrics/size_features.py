@@ -6,6 +6,32 @@ import polars as pl
 SIZE_FEATURE_RAW_COLUMNS = ["marketcap", "revenue", "assets"]
 
 
+def _marketcap_category_expr() -> pl.Expr:
+    """
+    Categorize market cap into standard size buckets.
+
+    Categories (industry standard):
+    - Mega cap: > $200B
+    - Large cap: $10B - $200B
+    - Mid cap: $2B - $10B
+    - Small cap: $300M - $2B
+    - Micro cap: < $300M
+    """
+    return (
+        pl.when(pl.col("marketcap") > 200_000_000_000)
+        .then(pl.lit("mega"))
+        .when(pl.col("marketcap") > 10_000_000_000)
+        .then(pl.lit("large"))
+        .when(pl.col("marketcap") > 2_000_000_000)
+        .then(pl.lit("mid"))
+        .when(pl.col("marketcap") > 300_000_000)
+        .then(pl.lit("small"))
+        .when(pl.col("marketcap") > 0)
+        .then(pl.lit("micro"))
+        .otherwise(None)
+    )
+
+
 def _revenue_growth_expr(shift: int) -> pl.Expr:
     """
     Revenue growth rate (percentage change). Use shift=1 for QoQ, shift=4 for YoY.
@@ -71,11 +97,16 @@ def get_size_feature_expressions() -> list[pl.Expr]:
 
     Use this for efficient batch calculation with other metric types.
 
-    Includes temporal growth features (QoQ and YoY).
+    Includes:
+    - Market cap category (categorical: mega/large/mid/small/micro)
+    - Temporal growth features (QoQ and YoY)
+
     Note: Raw features (marketcap, revenue, assets) are preserved separately by orchestrator.
     Note: Normalization (e.g., sector-based t-score) should be applied in preprocessing.
     """
     return [
+        # Categorical feature
+        _marketcap_category_expr().alias("marketcap_category"),
         # Temporal features (growth - percentage change)
         _revenue_growth_expr(1).alias("revenue_growth_qoq"),
         _revenue_growth_expr(4).alias("revenue_growth_yoy"),
