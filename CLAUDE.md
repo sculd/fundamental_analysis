@@ -93,6 +93,8 @@ The system should be capable of running backtest.
 - **Implementation details** (abstracted from user):
   - Fundamental ratios: Growth = absolute change (delta) - e.g., P/E change from 20 to 25 = +5
   - Other metrics: Growth = percentage change - e.g., ROE change from 10% to 12% = +20%
+  - Uses simple `.shift(1)` and `.shift(4)` on `reportperiod` for temporal calculations
+  - **Data quality verified**: After DataReader deduplication, 99.7% of consecutive quarters have regular ~91-day spacing; 62.7% of tickers have no missing quarters, 11.6% have 1-2 missing quarters
 - **Total features**: 3 size (raw) + 1 categorical + 11 snapshot values + 30 temporal features = 45 features
 
 **Notes:**
