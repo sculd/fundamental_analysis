@@ -52,21 +52,38 @@ def _roic_expr() -> pl.Expr:
     ).otherwise(None)
 
 
-def get_profitability_expressions() -> list[pl.Expr]:
+def get_profitability_snapshot_expressions() -> list[pl.Expr]:
     """
-    Return list of profitability metric expressions for composing with other metrics.
+    Return snapshot profitability metric expressions (non-temporal).
 
-    Use this for efficient batch calculation with other metric types.
-
-    Includes snapshot values and temporal features (growth QoQ/YoY).
+    Includes:
+    - Return on Equity (ROE)
+    - Return on Invested Capital (ROIC)
     """
     return [
-        # Snapshot values
         _roe_expr().alias("roe_calculated"),
         _roic_expr().alias("roic_calculated"),
-        # Temporal features (growth - percentage change)
+    ]
+
+
+def get_profitability_growth_expressions() -> list[pl.Expr]:
+    """
+    Return temporal growth expressions for profitability metrics.
+
+    Includes growth (QoQ and YoY) for ROE and ROIC.
+    """
+    return [
         temporal_change(_roe_expr(), 1, check_sign_crossing=True).alias("roe_calculated_growth_qoq"),
         temporal_change(_roe_expr(), 4, check_sign_crossing=True).alias("roe_calculated_growth_yoy"),
         temporal_change(_roic_expr(), 1, check_sign_crossing=True).alias("roic_calculated_growth_qoq"),
         temporal_change(_roic_expr(), 4, check_sign_crossing=True).alias("roic_calculated_growth_yoy"),
     ]
+
+
+def get_profitability_expressions() -> list[pl.Expr]:
+    """
+    Return all profitability metric expressions (snapshot + growth).
+
+    Use this for efficient batch calculation with other metric types.
+    """
+    return get_profitability_snapshot_expressions() + get_profitability_growth_expressions()

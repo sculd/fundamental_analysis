@@ -34,23 +34,28 @@ def _marketcap_category_expr() -> pl.Expr:
     )
 
 
-def get_size_feature_expressions() -> list[pl.Expr]:
+def get_size_snapshot_expressions() -> list[pl.Expr]:
     """
-    Return list of size feature expressions for composing with other metrics.
-
-    Use this for efficient batch calculation with other metric types.
+    Return snapshot size feature expressions (non-temporal).
 
     Includes:
     - Market cap category (categorical: mega/large/mid/small/micro)
-    - Temporal growth features (QoQ and YoY)
 
     Note: Raw features (marketcap, revenue, assets) are preserved separately by orchestrator.
     Note: Normalization (e.g., sector-based t-score) should be applied in preprocessing.
     """
     return [
-        # Categorical feature
         _marketcap_category_expr().alias("marketcap_category"),
-        # Temporal features (growth - percentage change)
+    ]
+
+
+def get_size_growth_expressions() -> list[pl.Expr]:
+    """
+    Return temporal growth feature expressions for size metrics.
+
+    Includes growth (QoQ and YoY) for revenue, marketcap, and assets.
+    """
+    return [
         temporal_change(pl.col("revenue"), 1).alias("revenue_growth_qoq"),
         temporal_change(pl.col("revenue"), 4).alias("revenue_growth_yoy"),
         temporal_change(pl.col("marketcap"), 1).alias("marketcap_growth_qoq"),
@@ -58,3 +63,12 @@ def get_size_feature_expressions() -> list[pl.Expr]:
         temporal_change(pl.col("assets"), 1).alias("assets_growth_qoq"),
         temporal_change(pl.col("assets"), 4).alias("assets_growth_yoy"),
     ]
+
+
+def get_size_feature_expressions() -> list[pl.Expr]:
+    """
+    Return all size feature expressions (snapshot + growth).
+
+    Use this for efficient batch calculation with other metric types.
+    """
+    return get_size_snapshot_expressions() + get_size_growth_expressions()

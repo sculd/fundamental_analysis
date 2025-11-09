@@ -2,26 +2,44 @@
 
 import polars as pl
 
-from fundamental_analysis.metrics.earnings_metrics import \
-    get_earnings_expressions
-from fundamental_analysis.metrics.financial_health import \
-    get_financial_health_expressions
-from fundamental_analysis.metrics.fundamental_ratios import \
-    get_fundamental_ratio_expressions
-from fundamental_analysis.metrics.profitability import \
-    get_profitability_expressions
+from fundamental_analysis.metrics.earnings_metrics import (
+    get_earnings_growth_expressions,
+    get_earnings_snapshot_expressions,
+)
+from fundamental_analysis.metrics.financial_health import (
+    get_financial_health_growth_expressions,
+    get_financial_health_snapshot_expressions,
+)
+from fundamental_analysis.metrics.fundamental_ratios import (
+    get_fundamental_ratio_growth_expressions,
+    get_fundamental_ratio_snapshot_expressions,
+)
+from fundamental_analysis.metrics.profitability import (
+    get_profitability_growth_expressions,
+    get_profitability_snapshot_expressions,
+)
 from fundamental_analysis.metrics.size_features import (
     SIZE_FEATURE_RAW_COLUMNS,
-    get_size_feature_expressions,
+    get_size_growth_expressions,
+    get_size_snapshot_expressions,
 )
 
 # Identifiers to keep from SF1 data
 IDENTIFIER_COLUMNS = ["ticker", "reportperiod", "datekey", "calendardate"]
 
 
-def calculate_all_metrics(df: pl.DataFrame) -> pl.DataFrame:
+def calculate_all_metrics(
+    df: pl.DataFrame,
+    include_snapshot_metrics: bool = True,
+    include_growth_metrics: bool = True,
+) -> pl.DataFrame:
     """
     Calculate all available metrics in single pass.
+
+    Args:
+        df: Input DataFrame with SF1 fundamental data
+        include_snapshot_metrics: If True, include snapshot (non-temporal) metrics
+        include_growth_metrics: If True, include growth (temporal) metrics
 
     Metrics included:
     - Size features (marketcap, revenue, assets + growth QoQ/YoY)
@@ -32,20 +50,37 @@ def calculate_all_metrics(df: pl.DataFrame) -> pl.DataFrame:
 
     All calculations happen in a single pass for maximum efficiency.
 
+    Performance optimization: Input is sorted by (ticker, reportperiod) once upfront
+    to avoid redundant sorting in temporal feature calculations (30+ operations).
+
     Returns DataFrame with ONLY identifiers and calculated metrics.
     All original SF1 columns are dropped after calculation.
 
     Note: Growth metrics require time-series data with multiple periods per ticker.
     Note: Normalization (e.g., sector-based t-score) should be applied in preprocessing.
     """
+    # Sort once for efficient temporal calculations
+    df = df.sort("ticker", "reportperiod")
+
+    # Build expression list based on parameters
+    expressions = []
+
+    if include_snapshot_metrics:
+        expressions.extend(get_size_snapshot_expressions())
+        expressions.extend(get_fundamental_ratio_snapshot_expressions())
+        expressions.extend(get_financial_health_snapshot_expressions())
+        expressions.extend(get_profitability_snapshot_expressions())
+        expressions.extend(get_earnings_snapshot_expressions())
+
+    if include_growth_metrics:
+        expressions.extend(get_size_growth_expressions())
+        expressions.extend(get_fundamental_ratio_growth_expressions())
+        expressions.extend(get_financial_health_growth_expressions())
+        expressions.extend(get_profitability_growth_expressions())
+        expressions.extend(get_earnings_growth_expressions())
+
     # Calculate all metrics
-    df_with_metrics = df.with_columns(
-        get_size_feature_expressions() +
-        get_fundamental_ratio_expressions() +
-        get_financial_health_expressions() +
-        get_profitability_expressions() +
-        get_earnings_expressions()
-    )
+    df_with_metrics = df.with_columns(expressions)
 
     # Get list of all calculated metric columns (new columns not in original)
     metric_columns = [

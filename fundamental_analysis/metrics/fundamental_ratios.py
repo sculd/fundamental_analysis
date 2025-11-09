@@ -45,23 +45,28 @@ def _ev_ebitda_ratio_expr() -> pl.Expr:
     ).otherwise(None)
 
 
-def get_fundamental_ratio_expressions() -> list[pl.Expr]:
+def get_fundamental_ratio_snapshot_expressions() -> list[pl.Expr]:
     """
-    Return list of fundamental ratio expressions for composing with other metrics.
+    Return snapshot fundamental ratio expressions (non-temporal).
 
-    Use this for efficient batch calculation with other metric types.
-
-    Includes snapshot values and temporal features (growth QoQ/YoY).
-    Note: For valuation ratios, "growth" represents absolute change (delta).
+    Includes P/E, P/B, P/S, P/C, and EV/EBITDA ratios.
     """
     return [
-        # Snapshot values
         _pe_ratio_expr().alias("pe_ratio"),
         _pb_ratio_expr().alias("pb_ratio"),
         _ps_ratio_expr().alias("ps_ratio"),
         _pc_ratio_expr().alias("pc_ratio"),
         _ev_ebitda_ratio_expr().alias("ev_ebitda_ratio"),
-        # Temporal features (growth - absolute change for ratios)
+    ]
+
+
+def get_fundamental_ratio_growth_expressions() -> list[pl.Expr]:
+    """
+    Return temporal growth expressions for fundamental ratios.
+
+    Note: For valuation ratios, "growth" represents absolute change (delta).
+    """
+    return [
         temporal_delta(_pe_ratio_expr(), 1).alias("pe_ratio_growth_qoq"),
         temporal_delta(_pe_ratio_expr(), 4).alias("pe_ratio_growth_yoy"),
         temporal_delta(_pb_ratio_expr(), 1).alias("pb_ratio_growth_qoq"),
@@ -73,3 +78,12 @@ def get_fundamental_ratio_expressions() -> list[pl.Expr]:
         temporal_delta(_ev_ebitda_ratio_expr(), 1).alias("ev_ebitda_ratio_growth_qoq"),
         temporal_delta(_ev_ebitda_ratio_expr(), 4).alias("ev_ebitda_ratio_growth_yoy"),
     ]
+
+
+def get_fundamental_ratio_expressions() -> list[pl.Expr]:
+    """
+    Return all fundamental ratio expressions (snapshot + growth).
+
+    Use this for efficient batch calculation with other metric types.
+    """
+    return get_fundamental_ratio_snapshot_expressions() + get_fundamental_ratio_growth_expressions()

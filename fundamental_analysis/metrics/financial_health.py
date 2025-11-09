@@ -33,21 +33,31 @@ def _interest_coverage_expr() -> pl.Expr:
     ).otherwise(None)
 
 
-def get_financial_health_expressions() -> list[pl.Expr]:
+def get_financial_health_snapshot_expressions() -> list[pl.Expr]:
     """
-    Return list of financial health metric expressions for composing with other metrics.
+    Return snapshot financial health metric expressions (non-temporal).
 
-    Use this for efficient batch calculation with other metric types.
-
-    Includes snapshot values and temporal features (growth QoQ/YoY).
+    Includes:
+    - Debt-to-equity ratio
+    - Current ratio
+    - Debt-to-assets ratio
+    - Interest coverage ratio
     """
     return [
-        # Snapshot values
         _debt_to_equity_expr().alias("debt_to_equity"),
         _current_ratio_expr().alias("current_ratio"),
         _debt_to_assets_expr().alias("debt_to_assets"),
         _interest_coverage_expr().alias("interest_coverage"),
-        # Temporal features (growth - percentage change)
+    ]
+
+
+def get_financial_health_growth_expressions() -> list[pl.Expr]:
+    """
+    Return temporal growth expressions for financial health metrics.
+
+    Includes growth (QoQ and YoY) for debt ratios, current ratio, and interest coverage.
+    """
+    return [
         temporal_change(_debt_to_equity_expr(), 1, check_sign_crossing=True).alias("debt_to_equity_growth_qoq"),
         temporal_change(_debt_to_equity_expr(), 4, check_sign_crossing=True).alias("debt_to_equity_growth_yoy"),
         temporal_change(_current_ratio_expr(), 1).alias("current_ratio_growth_qoq"),
@@ -57,3 +67,12 @@ def get_financial_health_expressions() -> list[pl.Expr]:
         temporal_change(_interest_coverage_expr(), 1, check_sign_crossing=True).alias("interest_coverage_growth_qoq"),
         temporal_change(_interest_coverage_expr(), 4, check_sign_crossing=True).alias("interest_coverage_growth_yoy"),
     ]
+
+
+def get_financial_health_expressions() -> list[pl.Expr]:
+    """
+    Return all financial health metric expressions (snapshot + growth).
+
+    Use this for efficient batch calculation with other metric types.
+    """
+    return get_financial_health_snapshot_expressions() + get_financial_health_growth_expressions()
