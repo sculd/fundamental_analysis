@@ -30,7 +30,7 @@ class DataReader:
         end_dt = datetime.strptime(snapshot_date, "%Y-%m-%d")
 
         # Find all tickers files
-        tickers_files = sorted(Config.TICKERS_DIR.glob("tickers_*.parquet"))
+        tickers_files = sorted(Config.TICKERS_DIR.glob("tickers_snapshot_*.parquet"))
 
         if not tickers_files:
             raise FileNotFoundError(f"No tickers files found in {Config.TICKERS_DIR}")
@@ -38,7 +38,7 @@ class DataReader:
         # Find the most recent file with date <= snapshot_date
         selected_file = None
         for file_path in tickers_files:
-            file_date_str = file_path.stem.replace("tickers_", "")
+            file_date_str = file_path.stem.replace("tickers_snapshot_", "")
             file_dt = datetime.strptime(file_date_str, "%Y-%m-%d")
 
             if file_dt <= end_dt:
