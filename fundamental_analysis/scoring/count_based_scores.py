@@ -145,7 +145,7 @@ def _calculate_rolling_z_scores(
     return df
 
 
-def calculate_undervaluation_count(
+def calculate_signal_counts(
     df: pl.DataFrame,
     window_days: int = 180,
     sigma_threshold: float = 2.0,
@@ -153,11 +153,14 @@ def calculate_undervaluation_count(
     date_col: str = "datekey",
 ) -> pl.DataFrame:
     """
-    Calculate count-based undervaluation score.
+    Calculate bidirectional outlier counts for all fundamental metrics.
 
-    Counts how many valuation metrics are outliers (beyond threshold).
-    For undervaluation: counts metrics with z-score < -sigma_threshold
-    (i.e., trading below sector average).
+    Treats all metrics equally, counting outliers in both favorable and
+    unfavorable directions. Each metric has a defined "good" direction:
+    - Valuation ratios: lower is better (cheap)
+    - Profitability: higher is better
+    - Liquidity: higher is better
+    - Leverage: lower is better
 
     Parameters
     ----------
@@ -176,117 +179,40 @@ def calculate_undervaluation_count(
     -------
     pl.DataFrame
         Original dataframe with added columns:
-        - undervaluation_count: number of metrics below -sigma_threshold
-        - undervaluation_available: number of metrics with valid z-scores
-        - undervaluation_ratio: count / available (0-1)
+        - favorable_count: number of metrics beyond threshold in "good" direction
+        - unfavorable_count: number of metrics beyond threshold in "bad" direction
+        - total_signal_count: favorable + unfavorable (magnitude of extremeness)
+        - net_signal: favorable - unfavorable (overall direction)
+        - metrics_available: number of metrics with valid z-scores
+        - favorable_ratio: favorable / available
+        - unfavorable_ratio: unfavorable / available
+        - total_ratio: total_signal / available
     """
-    undervaluation_metrics = [
-        "pe_ratio",
-        "pb_ratio",
-        "ps_ratio",
-        "pc_ratio",
-        "ev_ebitda_ratio",
-    ]
-
-    # Calculate rolling z-scores for valuation metrics
-    # Only use positive values for statistics (negative = unprofitable)
-    df = _calculate_rolling_z_scores(
-        df,
-        metrics=undervaluation_metrics,
-        window_days=window_days,
-        segment_col=segment_col,
-        date_col=date_col,
-        positive_only_metrics=undervaluation_metrics,  # All require positive values
-    )
-
-    # Count outliers (z-score < -sigma_threshold = undervalued)
-    zscore_cols = [f"{m}_zscore" for m in undervaluation_metrics]
-
-    df = df.with_columns([
-        # Count outliers (below -threshold)
-        pl.sum_horizontal([
-            pl.when(
-                pl.col(col).is_not_null() &
-                pl.col(col).is_finite() &
-                (pl.col(col) < -sigma_threshold)
-            )
-            .then(1)
-            .otherwise(0)
-            for col in zscore_cols
-        ]).alias("undervaluation_count"),
-
-        # Count available metrics
-        pl.sum_horizontal([
-            pl.when(pl.col(col).is_not_null() & pl.col(col).is_finite())
-            .then(1)
-            .otherwise(0)
-            for col in zscore_cols
-        ]).alias("undervaluation_available"),
-    ])
-
-    # Calculate ratio
-    df = df.with_columns([
-        pl.when(pl.col("undervaluation_available") > 0)
-        .then(pl.col("undervaluation_count") / pl.col("undervaluation_available"))
-        .otherwise(None)
-        .alias("undervaluation_ratio")
-    ])
-
-    return df
-
-
-def calculate_quality_count(
-    df: pl.DataFrame,
-    window_days: int = 180,
-    sigma_threshold: float = 2.0,
-    segment_col: str = "segment",
-    date_col: str = "datekey",
-) -> pl.DataFrame:
-    """
-    Calculate count-based quality score.
-
-    Counts how many quality metrics are outliers (beyond threshold).
-    For quality: counts metrics with |z-score| > sigma_threshold in the
-    "good" direction:
-    - ROE, ROIC, current_ratio, interest_coverage: z > +threshold (high is good)
-    - debt_to_equity, debt_to_assets: z < -threshold (low is good)
-
-    Parameters
-    ----------
-    df : pl.DataFrame
-        Input data with fundamental metrics
-    window_days : int, default 180
-        Rolling window size in days
-    sigma_threshold : float, default 2.0
-        Z-score threshold for outlier detection
-    segment_col : str, default "segment"
-        Segmentation column name
-    date_col : str, default "datekey"
-        Date column name
-
-    Returns
-    -------
-    pl.DataFrame
-        Original dataframe with added columns:
-        - quality_count: number of metrics beyond threshold in "good" direction
-        - quality_available: number of metrics with valid z-scores
-        - quality_ratio: count / available (0-1)
-    """
-    # Define quality metrics with direction
-    # direction: "higher" means high z-score is good, "lower" means low z-score is good
-    quality_metrics = [
+    # Define all metrics with their favorable direction
+    # Format: (metric_name, direction)
+    # direction: "lower" = low values are good, "higher" = high values are good
+    all_metrics = [
+        # Valuation metrics (lower is better - cheaper)
+        ("pe_ratio", "lower"),
+        ("pb_ratio", "lower"),
+        ("ps_ratio", "lower"),
+        ("pc_ratio", "lower"),
+        ("ev_ebitda_ratio", "lower"),
+        # Profitability metrics (higher is better)
         ("roe_calculated", "higher"),
         ("roic_calculated", "higher"),
+        # Liquidity metrics (higher is better)
         ("current_ratio", "higher"),
         ("interest_coverage", "higher"),
-        ("debt_to_equity", "lower"),  # Low debt is good
-        ("debt_to_assets", "lower"),  # Low debt is good
+        # Leverage metrics (lower is better)
+        ("debt_to_equity", "lower"),
+        ("debt_to_assets", "lower"),
     ]
 
-    metric_names = [m[0] for m in quality_metrics]
+    metric_names = [m[0] for m in all_metrics]
 
-    # Calculate rolling z-scores for quality metrics
-    # All quality metrics require positive values for meaningful statistics
+    # Calculate rolling z-scores for all metrics
+    # All metrics require positive values for meaningful statistics
     df = _calculate_rolling_z_scores(
         df,
         metrics=metric_names,
@@ -296,107 +222,99 @@ def calculate_quality_count(
         positive_only_metrics=metric_names,  # All require positive values
     )
 
-    # Count outliers based on direction
-    zscore_cols = [(f"{m[0]}_zscore", m[1]) for m in quality_metrics]
-
-    # Build conditions for each metric
-    outlier_conditions = []
+    # Build conditions for favorable and unfavorable outliers
+    favorable_conditions = []
+    unfavorable_conditions = []
     available_conditions = []
 
-    for col, direction in zscore_cols:
-        if direction == "higher":
-            # High is good: count if z > +threshold
-            outlier_conditions.append(
+    for metric_name, direction in all_metrics:
+        zscore_col = f"{metric_name}_zscore"
+
+        if direction == "lower":
+            # Lower is better (valuation, leverage)
+            # Favorable: z < -threshold (below average = good)
+            favorable_conditions.append(
                 pl.when(
-                    pl.col(col).is_not_null() &
-                    pl.col(col).is_finite() &
-                    (pl.col(col) > sigma_threshold)
+                    pl.col(zscore_col).is_not_null() &
+                    pl.col(zscore_col).is_finite() &
+                    (pl.col(zscore_col) < -sigma_threshold)
                 )
                 .then(1)
                 .otherwise(0)
             )
-        else:  # direction == "lower"
-            # Low is good: count if z < -threshold
-            outlier_conditions.append(
+            # Unfavorable: z > +threshold (above average = bad)
+            unfavorable_conditions.append(
                 pl.when(
-                    pl.col(col).is_not_null() &
-                    pl.col(col).is_finite() &
-                    (pl.col(col) < -sigma_threshold)
+                    pl.col(zscore_col).is_not_null() &
+                    pl.col(zscore_col).is_finite() &
+                    (pl.col(zscore_col) > sigma_threshold)
+                )
+                .then(1)
+                .otherwise(0)
+            )
+        else:  # direction == "higher"
+            # Higher is better (profitability, liquidity)
+            # Favorable: z > +threshold (above average = good)
+            favorable_conditions.append(
+                pl.when(
+                    pl.col(zscore_col).is_not_null() &
+                    pl.col(zscore_col).is_finite() &
+                    (pl.col(zscore_col) > sigma_threshold)
+                )
+                .then(1)
+                .otherwise(0)
+            )
+            # Unfavorable: z < -threshold (below average = bad)
+            unfavorable_conditions.append(
+                pl.when(
+                    pl.col(zscore_col).is_not_null() &
+                    pl.col(zscore_col).is_finite() &
+                    (pl.col(zscore_col) < -sigma_threshold)
                 )
                 .then(1)
                 .otherwise(0)
             )
 
+        # Count available metrics
         available_conditions.append(
-            pl.when(pl.col(col).is_not_null() & pl.col(col).is_finite())
+            pl.when(pl.col(zscore_col).is_not_null() & pl.col(zscore_col).is_finite())
             .then(1)
             .otherwise(0)
         )
 
+    # Add count columns
     df = df.with_columns([
-        # Count outliers in "good" direction
-        pl.sum_horizontal(outlier_conditions).alias("quality_count"),
-
-        # Count available metrics
-        pl.sum_horizontal(available_conditions).alias("quality_available"),
+        pl.sum_horizontal(favorable_conditions).alias("favorable_count"),
+        pl.sum_horizontal(unfavorable_conditions).alias("unfavorable_count"),
+        pl.sum_horizontal(available_conditions).alias("metrics_available"),
     ])
 
-    # Calculate ratio
+    # Add derived columns (total and net signals)
     df = df.with_columns([
-        pl.when(pl.col("quality_available") > 0)
-        .then(pl.col("quality_count") / pl.col("quality_available"))
+        # Total signal magnitude (how extreme/interesting is this stock?)
+        (pl.col("favorable_count") + pl.col("unfavorable_count")).alias("total_signal_count"),
+
+        # Net signal (overall good vs bad)
+        (pl.col("favorable_count") - pl.col("unfavorable_count")).alias("net_signal"),
+    ])
+
+    # Add ratio columns
+    df = df.with_columns([
+        # Ratios (normalize for missing data)
+        pl.when(pl.col("metrics_available") > 0)
+        .then(pl.col("favorable_count") / pl.col("metrics_available"))
         .otherwise(None)
-        .alias("quality_ratio")
+        .alias("favorable_ratio"),
+
+        pl.when(pl.col("metrics_available") > 0)
+        .then(pl.col("unfavorable_count") / pl.col("metrics_available"))
+        .otherwise(None)
+        .alias("unfavorable_ratio"),
+
+        pl.when(pl.col("metrics_available") > 0)
+        .then(pl.col("total_signal_count") / pl.col("metrics_available"))
+        .otherwise(None)
+        .alias("total_ratio"),
     ])
-
-    return df
-
-
-def calculate_combined_counts(
-    df: pl.DataFrame,
-    window_days: int = 180,
-    sigma_threshold: float = 2.0,
-    segment_col: str = "segment",
-    date_col: str = "datekey",
-) -> pl.DataFrame:
-    """
-    Calculate both count-based scores.
-
-    This is a convenience function that calculates both undervaluation
-    and quality counts in one call.
-
-    Parameters
-    ----------
-    df : pl.DataFrame
-        Input data with fundamental metrics
-    window_days : int, default 180
-        Rolling window size in days
-    sigma_threshold : float, default 2.0
-        Z-score threshold for outlier detection
-    segment_col : str, default "segment"
-        Segmentation column name
-    date_col : str, default "datekey"
-        Date column name
-
-    Returns
-    -------
-    pl.DataFrame
-        Original dataframe with added columns from both scoring functions
-    """
-    df = calculate_undervaluation_count(
-        df,
-        window_days=window_days,
-        sigma_threshold=sigma_threshold,
-        segment_col=segment_col,
-        date_col=date_col,
-    )
-
-    df = calculate_quality_count(
-        df,
-        window_days=window_days,
-        sigma_threshold=sigma_threshold,
-        segment_col=segment_col,
-        date_col=date_col,
-    )
 
     return df
