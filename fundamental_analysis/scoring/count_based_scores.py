@@ -5,6 +5,28 @@ from datetime import timedelta
 import polars as pl
 
 
+# Define all metrics with their favorable direction
+# Format: (metric_name, direction)
+# direction: "lower" = low values are good, "higher" = high values are good
+ALL_METRICS = [
+    # Valuation metrics (lower is better - cheaper)
+    ("pe_ratio", "lower"),
+    ("pb_ratio", "lower"),
+    ("ps_ratio", "lower"),
+    ("pc_ratio", "lower"),
+    ("ev_ebitda_ratio", "lower"),
+    # Profitability metrics (higher is better)
+    ("roe_calculated", "higher"),
+    ("roic_calculated", "higher"),
+    # Liquidity metrics (higher is better)
+    ("current_ratio", "higher"),
+    ("interest_coverage", "higher"),
+    # Leverage metrics (lower is better)
+    ("debt_to_equity", "lower"),
+    ("debt_to_assets", "lower"),
+]
+
+
 def _calculate_rolling_z_scores(
     df: pl.DataFrame,
     metrics: list[str],
@@ -143,6 +165,58 @@ def _calculate_rolling_z_scores(
     return df
 
 
+def calculate_metric_z_scores(
+    df: pl.DataFrame,
+    window_days: int = 180,
+    segment_col: str = "segment",
+    date_col: str = "datekey",
+) -> pl.DataFrame:
+    """
+    Calculate rolling z-scores for all standard fundamental metrics.
+
+    This is the core reusable function for z-score calculation. It processes
+    all 11 fundamental metrics (valuation, profitability, liquidity, leverage)
+    using point-in-time rolling windows to avoid look-ahead bias.
+
+    Use this function when you need z-scores but don't need the outlier counting
+    logic, or when you want to use the z-scores with custom analysis.
+
+    Parameters
+    ----------
+    df : pl.DataFrame
+        Input data with fundamental metrics, segment, and datekey columns
+    window_days : int, default 180
+        Size of rolling window in days (e.g., 180 for 6 months)
+    segment_col : str, default "segment"
+        Column name for segmentation (e.g., sector)
+    date_col : str, default "datekey"
+        Column name for date
+
+    Returns
+    -------
+    pl.DataFrame
+        Original dataframe with added z-score columns:
+        - {metric}_mean: rolling mean within segment
+        - {metric}_std: rolling std within segment
+        - {metric}_zscore: (value - mean) / std
+
+        For all 11 metrics: pe_ratio, pb_ratio, ps_ratio, pc_ratio,
+        ev_ebitda_ratio, roe_calculated, roic_calculated, current_ratio,
+        interest_coverage, debt_to_equity, debt_to_assets
+    """
+    metric_names = [m[0] for m in ALL_METRICS]
+
+    # All metrics require positive values for meaningful statistics
+    return _calculate_rolling_z_scores(
+        df,
+        metrics=metric_names,
+        window_days=window_days,
+        segment_col=segment_col,
+        date_col=date_col,
+        positive_only_metrics=metric_names,
+    )
+
+
 def calculate_signal_counts(
     df: pl.DataFrame,
     window_days: int = 180,
@@ -151,10 +225,13 @@ def calculate_signal_counts(
     date_col: str = "datekey",
 ) -> pl.DataFrame:
     """
-    Calculate bidirectional outlier counts for all fundamental metrics.
+    Calculate z-scores and bidirectional outlier counts for all fundamental metrics.
 
-    Treats all metrics equally, counting outliers in both favorable and
-    unfavorable directions. Each metric has a defined "good" direction:
+    Convenience function that combines z-score calculation (calculate_metric_z_scores)
+    with outlier counting logic. Treats all metrics equally, counting outliers in
+    both favorable and unfavorable directions.
+
+    Each metric has a defined "good" direction:
     - Valuation ratios: lower is better (cheap)
     - Profitability: higher is better
     - Liquidity: higher is better
@@ -177,6 +254,7 @@ def calculate_signal_counts(
     -------
     pl.DataFrame
         Original dataframe with added columns:
+        - Z-scores: {metric}_mean, {metric}_std, {metric}_zscore for all 11 metrics
         - favorable_count: number of metrics beyond threshold in "good" direction
         - unfavorable_count: number of metrics beyond threshold in "bad" direction
         - total_signal_count: favorable + unfavorable (magnitude of extremeness)
@@ -186,38 +264,12 @@ def calculate_signal_counts(
         - unfavorable_ratio: unfavorable / available
         - total_ratio: total_signal / available
     """
-    # Define all metrics with their favorable direction
-    # Format: (metric_name, direction)
-    # direction: "lower" = low values are good, "higher" = high values are good
-    all_metrics = [
-        # Valuation metrics (lower is better - cheaper)
-        ("pe_ratio", "lower"),
-        ("pb_ratio", "lower"),
-        ("ps_ratio", "lower"),
-        ("pc_ratio", "lower"),
-        ("ev_ebitda_ratio", "lower"),
-        # Profitability metrics (higher is better)
-        ("roe_calculated", "higher"),
-        ("roic_calculated", "higher"),
-        # Liquidity metrics (higher is better)
-        ("current_ratio", "higher"),
-        ("interest_coverage", "higher"),
-        # Leverage metrics (lower is better)
-        ("debt_to_equity", "lower"),
-        ("debt_to_assets", "lower"),
-    ]
-
-    metric_names = [m[0] for m in all_metrics]
-
-    # Calculate rolling z-scores for all metrics
-    # All metrics require positive values for meaningful statistics
-    df = _calculate_rolling_z_scores(
+    # Calculate z-scores for all standard metrics
+    df = calculate_metric_z_scores(
         df,
-        metrics=metric_names,
         window_days=window_days,
         segment_col=segment_col,
         date_col=date_col,
-        positive_only_metrics=metric_names,  # All require positive values
     )
 
     # Build conditions for favorable and unfavorable outliers
@@ -225,53 +277,40 @@ def calculate_signal_counts(
     unfavorable_conditions = []
     available_conditions = []
 
-    for metric_name, direction in all_metrics:
+    for metric_name, direction in ALL_METRICS:
         zscore_col = f"{metric_name}_zscore"
 
+        # Determine comparison based on metric direction
         if direction == "lower":
             # Lower is better (valuation, leverage)
-            # Favorable: z < -threshold (below average = good)
-            favorable_conditions.append(
-                pl.when(
-                    pl.col(zscore_col).is_not_null() &
-                    pl.col(zscore_col).is_finite() &
-                    (pl.col(zscore_col) < -sigma_threshold)
-                )
-                .then(1)
-                .otherwise(0)
-            )
-            # Unfavorable: z > +threshold (above average = bad)
-            unfavorable_conditions.append(
-                pl.when(
-                    pl.col(zscore_col).is_not_null() &
-                    pl.col(zscore_col).is_finite() &
-                    (pl.col(zscore_col) > sigma_threshold)
-                )
-                .then(1)
-                .otherwise(0)
-            )
+            favorable_condition = pl.col(zscore_col) < -sigma_threshold
+            unfavorable_condition = pl.col(zscore_col) > sigma_threshold
         else:  # direction == "higher"
             # Higher is better (profitability, liquidity)
-            # Favorable: z > +threshold (above average = good)
-            favorable_conditions.append(
-                pl.when(
-                    pl.col(zscore_col).is_not_null() &
-                    pl.col(zscore_col).is_finite() &
-                    (pl.col(zscore_col) > sigma_threshold)
-                )
-                .then(1)
-                .otherwise(0)
+            favorable_condition = pl.col(zscore_col) > sigma_threshold
+            unfavorable_condition = pl.col(zscore_col) < -sigma_threshold
+
+        # Add favorable condition with null/finite checks
+        favorable_conditions.append(
+            pl.when(
+                pl.col(zscore_col).is_not_null() &
+                pl.col(zscore_col).is_finite() &
+                favorable_condition
             )
-            # Unfavorable: z < -threshold (below average = bad)
-            unfavorable_conditions.append(
-                pl.when(
-                    pl.col(zscore_col).is_not_null() &
-                    pl.col(zscore_col).is_finite() &
-                    (pl.col(zscore_col) < -sigma_threshold)
-                )
-                .then(1)
-                .otherwise(0)
+            .then(1)
+            .otherwise(0)
+        )
+
+        # Add unfavorable condition with null/finite checks
+        unfavorable_conditions.append(
+            pl.when(
+                pl.col(zscore_col).is_not_null() &
+                pl.col(zscore_col).is_finite() &
+                unfavorable_condition
             )
+            .then(1)
+            .otherwise(0)
+        )
 
         # Count available metrics
         available_conditions.append(
