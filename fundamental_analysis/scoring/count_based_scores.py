@@ -58,18 +58,16 @@ def _calculate_rolling_z_scores(
 
     # For each metric, calculate rolling stats
     for metric in metrics:
+        df_valid = df.filter(
+            pl.col(metric).is_not_null() & pl.col(metric).is_finite()
+        ).select([date_col, segment_col, metric])
+
         # Filter to valid data for this metric
         # If metric requires positive values only, add that filter
         if metric in positive_only_metrics:
-            df_valid = df.filter(
-                pl.col(metric).is_not_null() &
-                pl.col(metric).is_finite() &
+            df_valid = df_valid.filter(
                 (pl.col(metric) > 0)
-            ).select([date_col, segment_col, metric])
-        else:
-            df_valid = df.filter(
-                pl.col(metric).is_not_null() & pl.col(metric).is_finite()
-            ).select([date_col, segment_col, metric])
+            )
 
         # For each unique (datekey, segment), calculate stats from rolling window
         stats_list = []
@@ -110,7 +108,7 @@ def _calculate_rolling_z_scores(
                     f"{metric}_std": None,
                 })
 
-        # Convert to dataframe and join back
+        # Convert to dataframe and join back to original df
         df_stats = pl.DataFrame(stats_list)
         df = df.join(
             df_stats,
