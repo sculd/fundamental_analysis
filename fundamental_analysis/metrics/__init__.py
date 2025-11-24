@@ -3,26 +3,19 @@
 import polars as pl
 
 from fundamental_analysis.metrics.earnings_metrics import (
-    get_earnings_growth_expressions,
-    get_earnings_snapshot_expressions,
-)
+    get_earnings_growth_expressions, get_earnings_snapshot_expressions)
 from fundamental_analysis.metrics.financial_health import (
     get_financial_health_growth_expressions,
-    get_financial_health_snapshot_expressions,
-)
+    get_financial_health_snapshot_expressions)
 from fundamental_analysis.metrics.fundamental_ratios import (
     get_fundamental_ratio_growth_expressions,
-    get_fundamental_ratio_snapshot_expressions,
-)
+    get_fundamental_ratio_snapshot_expressions)
 from fundamental_analysis.metrics.profitability import (
     get_profitability_growth_expressions,
-    get_profitability_snapshot_expressions,
-)
+    get_profitability_snapshot_expressions)
 from fundamental_analysis.metrics.size_features import (
-    SIZE_FEATURE_RAW_COLUMNS,
-    get_size_growth_expressions,
-    get_size_snapshot_expressions,
-)
+    SIZE_FEATURE_RAW_COLUMNS, get_size_growth_expressions,
+    get_size_snapshot_expressions)
 
 # Identifiers to keep from SF1 data
 IDENTIFIER_COLUMNS = ["ticker", "reportperiod", "datekey", "calendardate"]

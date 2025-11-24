@@ -4,7 +4,6 @@ from datetime import timedelta
 
 import polars as pl
 
-
 # Define all metrics with their favorable direction
 # Format: (metric_name, direction)
 # direction: "lower" = low values are good, "higher" = high values are good
