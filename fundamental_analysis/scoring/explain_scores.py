@@ -1,21 +1,65 @@
 """Explanation and drill-down functions for outlier scores."""
 
+from dataclasses import dataclass
+
 import polars as pl
 
 from .count_based_scores import ALL_METRICS
 
 
-def get_outlier_details(
+@dataclass
+class OutlierSummaryFilter:
+    """Filter configuration for outlier summary.
+
+    Parameters
+    ----------
+    outlier_only : bool, default True
+        If True, filter to only rows where is_outlier=True
+    direction_filter : str | None, default None
+        If provided, filter to only this direction ("favorable" or "unfavorable")
+    """
+
+    outlier_only: bool = True
+    direction_filter: str | None = None
+
+    def __post_init__(self):
+        """Validate filter configuration."""
+        if self.outlier_only and self.direction_filter is None:
+            raise ValueError(
+                "direction_filter must be provided if outlier_only is True"
+            )
+
+        if self.direction_filter is not None:
+            if self.direction_filter not in ("favorable", "unfavorable"):
+                raise ValueError(
+                    f"direction_filter must be 'favorable' or 'unfavorable', "
+                    f"got '{self.direction_filter}'"
+                )
+
+
+def melt_and_classify_metrics(
     df: pl.DataFrame,
     ticker: str | None = None,
     sigma_threshold: float = 2.0,
+    filter_config: OutlierSummaryFilter | None = None,
 ) -> pl.DataFrame:
     """
-    Reshape scored data from wide to long format for detailed analysis.
+    Reshape scored data from wide to long format and classify outliers.
 
-    Transforms each stock-quarter row from wide format (one column per metric)
-    to long format (one row per metric), making it easy to see which specific
-    metrics are outliers and their values.
+    Transforms each stock-quarter row into multiple rows (one per metric),
+    classifying which metrics are outliers with their values and statistics.
+
+    Example transformation:
+        Input (wide format):
+        | ticker | pe_ratio | pe_ratio_zscore | pb_ratio | pb_ratio_zscore |
+        |--------|----------|-----------------|----------|-----------------|
+        | AAPL   | 10       | -2.5            | 3.2      | 0.8             |
+
+        Output (long format):
+        | ticker | metric_name | raw_value | zscore | is_outlier | outlier_direction |
+        |--------|-------------|-----------|--------|------------|-------------------|
+        | AAPL   | pe_ratio    | 10        | -2.5   | True       | favorable         |
+        | AAPL   | pb_ratio    | 3.2       | 0.8    | False      | None              |
 
     Parameters
     ----------
@@ -26,22 +70,16 @@ def get_outlier_details(
         If provided, filter to only this ticker
     sigma_threshold : float, default 2.0
         Z-score threshold used to determine outliers
+    filter_config : OutlierSummaryFilter | None, default None
+        If provided, filter results based on outlier status and/or direction.
+        If None, return all metrics without filtering.
 
     Returns
     -------
     pl.DataFrame
-        Long-format DataFrame with columns:
-        - ticker: Stock ticker
-        - datekey: Report date
-        - segment: Sector segment
-        - metric_name: Name of the metric (e.g., "pe_ratio")
-        - metric_direction: "lower" or "higher" (what's favorable)
-        - raw_value: Actual metric value
-        - zscore: Z-score within segment
-        - segment_mean: Mean value in segment
-        - segment_std: Standard deviation in segment
-        - is_outlier: Boolean, True if beyond threshold
-        - outlier_direction: "favorable", "unfavorable", or None
+        Long-format DataFrame with one row per stock-metric combination.
+        Includes metric values, z-scores, segment statistics, and outlier flags.
+        Filtered according to filter_config if provided.
     """
     # Filter to specific ticker if requested
     if ticker is not None:
@@ -92,47 +130,15 @@ def get_outlier_details(
                 "outlier_direction": outlier_direction,
             })
 
-    return pl.DataFrame(rows)
+    result = pl.DataFrame(rows)
 
+    # Apply filtering if requested
+    if filter_config is not None:
+        if filter_config.outlier_only:
+            result = result.filter(pl.col("is_outlier") == True)
 
-def get_outlier_summary(
-    df: pl.DataFrame,
-    ticker: str | None = None,
-    sigma_threshold: float = 2.0,
-    direction_filter: str | None = None,
-) -> pl.DataFrame:
-    """
-    Get only the outlier metrics (filtered version of get_outlier_details).
-
-    This is a convenience function that returns only rows where is_outlier=True,
-    making it easy to see just the extreme metrics without all the noise.
-
-    Parameters
-    ----------
-    df : pl.DataFrame
-        DataFrame with z-scores for fundamental metrics. Typically output from
-        calculate_metric_z_scores() or calculate_signal_counts().
-    ticker : str | None, default None
-        If provided, filter to only this ticker
-    sigma_threshold : float, default 2.0
-        Z-score threshold used to determine outliers
-    direction_filter : str | None, default None
-        If provided, filter to only this direction ("favorable" or "unfavorable")
-
-    Returns
-    -------
-    pl.DataFrame
-        Filtered long-format DataFrame showing only outlier metrics
-    """
-    # Get full details
-    details = get_outlier_details(df, ticker=ticker, sigma_threshold=sigma_threshold)
-
-    # Filter to outliers only
-    result = details.filter(pl.col("is_outlier") == True)
-
-    # Apply direction filter if requested
-    if direction_filter is not None:
-        result = result.filter(pl.col("outlier_direction") == direction_filter)
+        if filter_config.direction_filter is not None:
+            result = result.filter(pl.col("outlier_direction") == filter_config.direction_filter)
 
     return result
 
@@ -172,7 +178,7 @@ def get_stocks_with_metric_outlier(
         sorted by z-score in the direction that matches the request
     """
     # Get all outlier details
-    details = get_outlier_details(df, sigma_threshold=sigma_threshold)
+    details = melt_and_classify_metrics(df, sigma_threshold=sigma_threshold)
 
     # Filter to specific metric and direction
     result = details.filter(
