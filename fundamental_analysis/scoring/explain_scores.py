@@ -24,11 +24,6 @@ class OutlierSummaryFilter:
 
     def __post_init__(self):
         """Validate filter configuration."""
-        if self.outlier_only and self.direction_filter is None:
-            raise ValueError(
-                "direction_filter must be provided if outlier_only is True"
-            )
-
         if self.direction_filter is not None:
             if self.direction_filter not in ("favorable", "unfavorable"):
                 raise ValueError(
@@ -156,6 +151,22 @@ def get_stocks_with_metric_outlier(
     Useful for questions like:
     - "Which stocks have exceptionally high ROE?"
     - "Which stocks have very low P/E ratios?"
+
+    Example query:
+        # Find stocks with exceptionally high ROE (profitability outliers)
+        high_roe = get_stocks_with_metric_outlier(
+            df,
+            metric_name="roe_calculated",
+            direction="favorable",
+            sigma_threshold=2.0
+        )
+
+        Result:
+        | ticker | segment    | metric_name    | raw_value | zscore | is_outlier |
+        |--------|------------|----------------|-----------|--------|------------|
+        | NVDA   | Technology | roe_calculated | 0.85      | 4.2    | True       |
+        | AAPL   | Technology | roe_calculated | 0.72      | 3.1    | True       |
+        | MSFT   | Technology | roe_calculated | 0.68      | 2.8    | True       |
 
     Parameters
     ----------
