@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import polars as pl
 
-from .count_based_scores import ALL_METRICS
+from .z_score import ALL_METRICS
 
 
 @dataclass
@@ -34,7 +34,7 @@ class OutlierSummaryFilter:
 
 def melt_and_classify_metrics(
     df: pl.DataFrame,
-    ticker: str | None = None,
+    tickers: list[str] | None = None,
     sigma_threshold: float = 2.0,
     filter_config: OutlierSummaryFilter | None = None,
 ) -> pl.DataFrame:
@@ -61,8 +61,8 @@ def melt_and_classify_metrics(
     df : pl.DataFrame
         DataFrame with z-scores for fundamental metrics. Typically output from
         calculate_metric_z_scores() or calculate_signal_counts().
-    ticker : str | None, default None
-        If provided, filter to only this ticker
+    tickers : list[str] | None, default None
+        If provided, filter to only these tickers
     sigma_threshold : float, default 2.0
         Z-score threshold used to determine outliers
     filter_config : OutlierSummaryFilter | None, default None
@@ -76,9 +76,9 @@ def melt_and_classify_metrics(
         Includes metric values, z-scores, segment statistics, and outlier flags.
         Filtered according to filter_config if provided.
     """
-    # Filter to specific ticker if requested
-    if ticker is not None:
-        df = df.filter(pl.col("ticker") == ticker)
+    # Filter to specific tickers if requested
+    if tickers is not None:
+        df = df.filter(pl.col("ticker").is_in(tickers))
 
     # Build list of rows for long format
     rows = []
