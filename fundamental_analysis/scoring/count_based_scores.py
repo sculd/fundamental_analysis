@@ -259,9 +259,6 @@ def calculate_signal_counts(
         - total_signal_count: favorable + unfavorable (magnitude of extremeness)
         - net_signal: favorable - unfavorable (overall direction)
         - metrics_available: number of metrics with valid z-scores
-        - favorable_ratio: favorable / available
-        - unfavorable_ratio: unfavorable / available
-        - total_ratio: total_signal / available
     """
     # Calculate z-scores for all standard metrics
     df = calculate_metric_z_scores(
@@ -332,25 +329,6 @@ def calculate_signal_counts(
 
         # Net signal (overall good vs bad)
         (pl.col("favorable_count") - pl.col("unfavorable_count")).alias("net_signal"),
-    ])
-
-    # Add ratio columns
-    df = df.with_columns([
-        # Ratios (normalize for missing data)
-        pl.when(pl.col("metrics_available") > 0)
-        .then(pl.col("favorable_count") / pl.col("metrics_available"))
-        .otherwise(None)
-        .alias("favorable_ratio"),
-
-        pl.when(pl.col("metrics_available") > 0)
-        .then(pl.col("unfavorable_count") / pl.col("metrics_available"))
-        .otherwise(None)
-        .alias("unfavorable_ratio"),
-
-        pl.when(pl.col("metrics_available") > 0)
-        .then(pl.col("total_signal_count") / pl.col("metrics_available"))
-        .otherwise(None)
-        .alias("total_ratio"),
     ])
 
     return df
