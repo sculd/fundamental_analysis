@@ -24,6 +24,15 @@ def calculate_signal_counts(
     - Liquidity: higher is better
     - Leverage: lower is better
 
+    Example:
+        df = calculate_signal_counts(df, sigma_threshold=2.0, min_total_signal_count=1)
+
+        Result:
+        | ticker | favorable_count | unfavorable_count | total_signal_count | net_signal |
+        |--------|-----------------|-------------------|--------------------| -----------|
+        | AAPL   | 3               | 1                 | 4                  | 2          |
+        | NVDA   | 5               | 0                 | 5                  | 5          |
+
     Parameters
     ----------
     df : pl.DataFrame
@@ -39,7 +48,6 @@ def calculate_signal_counts(
     -------
     pl.DataFrame
         Original dataframe with added columns:
-        - Z-scores: {metric}_mean, {metric}_std, {metric}_zscore for all 11 metrics
         - favorable_count: number of metrics beyond threshold in "good" direction
         - unfavorable_count: number of metrics beyond threshold in "bad" direction
         - total_signal_count: favorable + unfavorable (magnitude of extremeness)
