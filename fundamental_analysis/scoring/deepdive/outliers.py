@@ -2,8 +2,8 @@
 
 import polars as pl
 
-from .melt import melt_and_classify_metrics
-from .z_score import ALL_METRICS, ZScoreOption
+from fundamental_analysis.scoring.melt import melt_and_classify_metrics
+from fundamental_analysis.scoring.z_score import ALL_METRICS, ZScoreOption
 
 
 def get_stocks_with_metric_outlier(

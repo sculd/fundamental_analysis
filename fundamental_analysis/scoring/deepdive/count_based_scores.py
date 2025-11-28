@@ -2,7 +2,7 @@
 
 import polars as pl
 
-from .z_score import ALL_METRICS, ZScoreOption, calculate_metric_z_scores
+from fundamental_analysis.scoring.z_score import ALL_METRICS, ZScoreOption, calculate_metric_z_scores
 
 
 def calculate_signal_counts(
