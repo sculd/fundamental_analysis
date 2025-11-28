@@ -1,8 +1,28 @@
-"""Count-based scoring: count metrics beyond sigma threshold."""
+"""Z-score calculation for fundamental metrics."""
 
+from dataclasses import dataclass
 from datetime import timedelta
 
 import polars as pl
+
+
+@dataclass
+class ZScoreOption:
+    """Configuration for z-score calculation.
+
+    Parameters
+    ----------
+    window_days : int, default 180
+        Rolling window size in days for calculating segment statistics
+    segment_col : str, default "segment"
+        Column name for segmentation
+    date_col : str, default "datekey"
+        Column name for date
+    """
+
+    window_days: int = 180
+    segment_col: str = "segment"
+    date_col: str = "datekey"
 
 # Define all metrics with their favorable direction
 # Format: (metric_name, direction)
@@ -29,9 +49,7 @@ ALL_METRICS = [
 def _calculate_rolling_z_scores(
     df: pl.DataFrame,
     metrics: list[str],
-    window_days: int,
-    segment_col: str = "segment",
-    date_col: str = "datekey",
+    option: ZScoreOption,
     positive_only_metrics: list[str] | None = None,
 ) -> pl.DataFrame:
     """
@@ -47,12 +65,8 @@ def _calculate_rolling_z_scores(
         Input data with metrics, segment, and datekey columns
     metrics : list[str]
         List of metric column names to calculate z-scores for
-    window_days : int
-        Size of rolling window in days (e.g., 180 for 6 months)
-    segment_col : str, default "segment"
-        Column name for segmentation (e.g., sector)
-    date_col : str, default "datekey"
-        Column name for date
+    option : ZScoreOption
+        Configuration for z-score calculation
     positive_only_metrics : list[str] | None, default None
         Metrics that should only use positive values for statistics.
         Z-scores will only be calculated for positive values of these metrics.
@@ -67,6 +81,10 @@ def _calculate_rolling_z_scores(
     """
     if positive_only_metrics is None:
         positive_only_metrics = []
+
+    segment_col = option.segment_col
+    date_col = option.date_col
+    window_days = option.window_days
 
     # Ensure sorted by segment and date
     df = df.sort(segment_col, date_col)
@@ -166,9 +184,7 @@ def _calculate_rolling_z_scores(
 
 def calculate_metric_z_scores(
     df: pl.DataFrame,
-    window_days: int = 180,
-    segment_col: str = "segment",
-    date_col: str = "datekey",
+    option: ZScoreOption | None = None,
 ) -> pl.DataFrame:
     """
     Calculate rolling z-scores for all standard fundamental metrics.
@@ -184,12 +200,8 @@ def calculate_metric_z_scores(
     ----------
     df : pl.DataFrame
         Input data with fundamental metrics, segment, and datekey columns
-    window_days : int, default 180
-        Size of rolling window in days (e.g., 180 for 6 months)
-    segment_col : str, default "segment"
-        Column name for segmentation (e.g., sector)
-    date_col : str, default "datekey"
-        Column name for date
+    option : ZScoreOption | None, default None
+        Configuration for z-score calculation. If None, uses default values.
 
     Returns
     -------
@@ -203,14 +215,15 @@ def calculate_metric_z_scores(
         ev_ebitda_ratio, roe_calculated, roic_calculated, current_ratio,
         interest_coverage, debt_to_equity, debt_to_assets
     """
+    if option is None:
+        option = ZScoreOption()
+
     metric_names = [m[0] for m in ALL_METRICS]
 
     # All metrics require positive values for meaningful statistics
     return _calculate_rolling_z_scores(
         df,
         metrics=metric_names,
-        window_days=window_days,
-        segment_col=segment_col,
-        date_col=date_col,
+        option=option,
         positive_only_metrics=metric_names,
     )

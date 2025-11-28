@@ -2,15 +2,13 @@
 
 import polars as pl
 
-from .z_score import ALL_METRICS, calculate_metric_z_scores
+from .z_score import ALL_METRICS, ZScoreOption, calculate_metric_z_scores
 
 
 def calculate_signal_counts(
     df: pl.DataFrame,
-    window_days: int = 180,
+    option: ZScoreOption | None = None,
     sigma_threshold: float = 2.0,
-    segment_col: str = "segment",
-    date_col: str = "datekey",
     min_total_signal_count: int = 0,
 ) -> pl.DataFrame:
     """
@@ -30,14 +28,10 @@ def calculate_signal_counts(
     ----------
     df : pl.DataFrame
         Input data with fundamental metrics
-    window_days : int, default 180
-        Rolling window size in days
+    option : ZScoreOption | None, default None
+        Configuration for z-score calculation. If None, uses default values.
     sigma_threshold : float, default 2.0
         Z-score threshold for outlier detection
-    segment_col : str, default "segment"
-        Segmentation column name
-    date_col : str, default "datekey"
-        Date column name
     min_total_signal_count : int, default 0
         Minimum total_signal_count to include in results. Rows with fewer signals are filtered out.
 
@@ -52,13 +46,11 @@ def calculate_signal_counts(
         - net_signal: favorable - unfavorable (overall direction)
         - metrics_available: number of metrics with valid z-scores
     """
+    if option is None:
+        option = ZScoreOption()
+
     # Calculate z-scores for all standard metrics
-    df = calculate_metric_z_scores(
-        df,
-        window_days=window_days,
-        segment_col=segment_col,
-        date_col=date_col,
-    )
+    df = calculate_metric_z_scores(df, option=option)
 
     # Build conditions for favorable and unfavorable outliers
     favorable_conditions = []
