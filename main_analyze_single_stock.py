@@ -159,7 +159,8 @@ def analyze_stock(ticker: str, as_of_date: str, window_days: int = 180):
             # Format segment stats
             if mean is not None and std is not None:
                 mean_str = format_value(mean, metric)
-                stats_str = f"(segment mean: {mean_str})"
+                std_str = format_value(std, metric)
+                stats_str = f"(segment: mean={mean_str}, std={std_str})"
             else:
                 stats_str = ""
 
