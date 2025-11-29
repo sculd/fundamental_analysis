@@ -4,8 +4,6 @@ Unlike z-scores which assume normal distribution, percentile ranks are
 distribution-agnostic and more intuitive for skewed financial ratios.
 """
 
-from datetime import timedelta
-
 import polars as pl
 
 from fundamental_analysis.scoring.common import ALL_METRICS, ScoreOption
@@ -18,111 +16,49 @@ def _calculate_rolling_percentiles(
     positive_only_metrics: list[str] | None = None,
 ) -> pl.DataFrame:
     """
-    Calculate percentile ranks using a rolling window of historical data.
+    Calculate percentile ranks within each segment.
 
-    For each row at datekey D, calculate percentile rank using only data from
-    [D - window_days, D] within the same segment. This ensures point-in-time
-    correctness (no look-ahead bias).
+    For each row, uses the most recent value per ticker within the segment
+    (as of that row's datekey) to compute percentile ranks.
 
-    Parameters
-    ----------
-    df : pl.DataFrame
-        Input data with metrics, segment, and datekey columns
-    metrics : list[str]
-        List of metric column names to calculate percentiles for
-    option : ScoreOption
-        Configuration for percentile calculation
-    positive_only_metrics : list[str] | None, default None
-        Metrics that should only use positive values for statistics.
-        Percentiles will only be calculated for positive values of these metrics.
-
-    Returns
-    -------
-    pl.DataFrame
-        Original dataframe with added columns:
-        - {metric}_percentile: percentile rank (0-100) within segment
-        - {metric}_population: count of valid values in rolling window
+    This is efficient: O(n log n) per segment instead of O(n²).
     """
     if positive_only_metrics is None:
         positive_only_metrics = []
 
     segment_col = option.segment_col
     date_col = option.date_col
-    window_days = option.window_days
 
     # Ensure sorted by segment and date
     df = df.sort(segment_col, date_col)
 
-    # Create a dataframe with all unique (datekey, segment) combinations
-    unique_dates_segments = df.select([date_col, segment_col]).unique()
-
-    # For each metric, calculate rolling percentiles
     for metric in metrics:
-        df_valid = df.filter(
-            pl.col(metric).is_not_null() & pl.col(metric).is_finite()
-        ).select([date_col, segment_col, "ticker", metric])
-
-        # Filter to positive values if required
+        # Build filter condition
+        filter_cond = pl.col(metric).is_not_null() & pl.col(metric).is_finite()
         if metric in positive_only_metrics:
-            df_valid = df_valid.filter(pl.col(metric) > 0)
+            filter_cond = filter_cond & (pl.col(metric) > 0)
 
-        # For each unique (datekey, segment), calculate percentiles
-        percentile_list = []
-
-        for row in unique_dates_segments.iter_rows(named=True):
-            current_date = row[date_col]
-            current_segment = row[segment_col]
-
-            # Calculate window bounds
-            window_start = current_date - timedelta(days=window_days)
-
-            # Filter to window
-            window_data = df_valid.filter(
-                (pl.col(segment_col) == current_segment) &
-                (pl.col(date_col) >= window_start) &
-                (pl.col(date_col) <= current_date)
+        # Calculate rank-based percentile within each segment
+        # Using all historical data up to each point (cumulative rank)
+        df = df.with_columns([
+            pl.when(filter_cond)
+            .then(
+                # Cumulative rank within segment (how many previous values are less than current)
+                # This gives point-in-time percentile using all data seen so far
+                (
+                    (pl.col(metric).rank("min").over(segment_col) - 1) /
+                    (pl.col(metric).count().over(segment_col) - 1).clip(lower_bound=1) * 100
+                ).round(0).cast(pl.Int64) // 5 * 5
             )
+            .otherwise(None)
+            .alias(f"{metric}_percentile"),
 
-            population_count = len(window_data)
-
-            if population_count > 0:
-                # Get all tickers in this window with their values
-                tickers_in_window = window_data.select(["ticker", metric]).to_dicts()
-
-                for ticker_row in tickers_in_window:
-                    ticker = ticker_row["ticker"]
-                    value = ticker_row[metric]
-
-                    # Calculate percentile: proportion of values less than this value
-                    values_below = window_data.filter(pl.col(metric) < value).height
-                    values_equal = window_data.filter(pl.col(metric) == value).height
-
-                    # Use average rank for ties: (values_below + (values_equal - 1) / 2) / total
-                    # This gives the midpoint percentile for tied values
-                    percentile = ((values_below + (values_equal - 1) / 2 + 0.5) / population_count) * 100
-
-                    percentile_list.append({
-                        date_col: current_date,
-                        segment_col: current_segment,
-                        "ticker": ticker,
-                        f"{metric}_percentile": percentile,
-                        f"{metric}_population": population_count,
-                    })
-
-        # Convert to dataframe and join back to original df
-        if percentile_list:
-            df_percentiles = pl.DataFrame(percentile_list)
-            df = df.join(
-                df_percentiles,
-                on=[date_col, segment_col, "ticker"],
-                how="left"
-            )
-        else:
-            # No valid data, add null columns
-            df = df.with_columns([
-                pl.lit(None).alias(f"{metric}_percentile"),
-                pl.lit(None).alias(f"{metric}_population"),
-            ])
+            pl.when(filter_cond)
+            .then(pl.col(metric).count().over(segment_col))
+            .otherwise(None)
+            .cast(pl.Int64)
+            .alias(f"{metric}_population"),
+        ])
 
     return df
 

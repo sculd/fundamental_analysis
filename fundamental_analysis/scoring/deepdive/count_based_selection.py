@@ -1,31 +1,32 @@
-"""Count-based scoring: count metrics beyond sigma threshold."""
+"""Count-based scoring: count metrics beyond percentile threshold."""
 
 import polars as pl
 
-from fundamental_analysis.scoring.z_score import ALL_METRICS, ZScoreOption, calculate_metric_z_scores
+from fundamental_analysis.scoring.common import ALL_METRICS, ScoreOption
+from fundamental_analysis.scoring.percentile_score import calculate_metric_percentiles
 
 
 def calculate_signal_counts(
     df: pl.DataFrame,
-    option: ZScoreOption | None = None,
-    sigma_threshold: float = 2.0,
+    option: ScoreOption | None = None,
+    percentile_threshold: float = 10.0,
     min_total_signal_count: int = 0,
 ) -> pl.DataFrame:
     """
-    Calculate z-scores and bidirectional outlier counts for all fundamental metrics.
+    Calculate percentiles and bidirectional outlier counts for all fundamental metrics.
 
-    Convenience function that combines z-score calculation (calculate_metric_z_scores)
+    Convenience function that combines percentile calculation (calculate_metric_percentiles)
     with outlier counting logic. Treats all metrics equally, counting outliers in
     both favorable and unfavorable directions.
 
     Each metric has a defined "good" direction:
-    - Valuation ratios: lower is better (cheap)
-    - Profitability: higher is better
-    - Liquidity: higher is better
-    - Leverage: lower is better
+    - Valuation ratios: lower is better (cheap) - favorable if <= percentile_threshold
+    - Profitability: higher is better - favorable if >= (100 - percentile_threshold)
+    - Liquidity: higher is better - favorable if >= (100 - percentile_threshold)
+    - Leverage: lower is better - favorable if <= percentile_threshold
 
     Example:
-        df = calculate_signal_counts(df, sigma_threshold=2.0, min_total_signal_count=1)
+        df = calculate_signal_counts(df, percentile_threshold=10.0, min_total_signal_count=1)
 
         Result:
         | ticker | favorable_count | unfavorable_count | total_signal_count | net_signal |
@@ -37,10 +38,11 @@ def calculate_signal_counts(
     ----------
     df : pl.DataFrame
         Input data with fundamental metrics
-    option : ZScoreOption | None, default None
-        Configuration for z-score calculation. If None, uses default values.
-    sigma_threshold : float, default 2.0
-        Z-score threshold for outlier detection
+    option : ScoreOption | None, default None
+        Configuration for percentile calculation. If None, uses default values.
+    percentile_threshold : float, default 10.0
+        Percentile threshold for outlier detection (0-100).
+        Favorable outliers are in top/bottom percentile_threshold% depending on metric direction.
     min_total_signal_count : int, default 0
         Minimum total_signal_count to include in results. Rows with fewer signals are filtered out.
 
@@ -52,13 +54,13 @@ def calculate_signal_counts(
         - unfavorable_count: number of metrics beyond threshold in "bad" direction
         - total_signal_count: favorable + unfavorable (magnitude of extremeness)
         - net_signal: favorable - unfavorable (overall direction)
-        - metrics_available: number of metrics with valid z-scores
+        - metrics_available: number of metrics with valid percentiles
     """
     if option is None:
-        option = ZScoreOption()
+        option = ScoreOption()
 
-    # Calculate z-scores for all standard metrics
-    df = calculate_metric_z_scores(df, option=option)
+    # Calculate percentiles for all standard metrics
+    df = calculate_metric_percentiles(df, option=option)
 
     # Build conditions for favorable and unfavorable outliers
     favorable_conditions = []
@@ -66,34 +68,36 @@ def calculate_signal_counts(
     available_conditions = []
 
     for metric_name, direction in ALL_METRICS:
-        zscore_col = f"{metric_name}_zscore"
+        percentile_col = f"{metric_name}_percentile"
 
         # Determine comparison based on metric direction
         if direction == "lower":
             # Lower is better (valuation, leverage)
-            favorable_condition = pl.col(zscore_col) < -sigma_threshold
-            unfavorable_condition = pl.col(zscore_col) > sigma_threshold
+            # Favorable: low percentile (bottom X%)
+            # Unfavorable: high percentile (top X%)
+            favorable_condition = pl.col(percentile_col) <= percentile_threshold
+            unfavorable_condition = pl.col(percentile_col) >= (100 - percentile_threshold)
         else:  # direction == "higher"
             # Higher is better (profitability, liquidity)
-            favorable_condition = pl.col(zscore_col) > sigma_threshold
-            unfavorable_condition = pl.col(zscore_col) < -sigma_threshold
+            # Favorable: high percentile (top X%)
+            # Unfavorable: low percentile (bottom X%)
+            favorable_condition = pl.col(percentile_col) >= (100 - percentile_threshold)
+            unfavorable_condition = pl.col(percentile_col) <= percentile_threshold
 
-        # Add favorable condition with null/finite checks
+        # Add favorable condition with null check
         favorable_conditions.append(
             pl.when(
-                pl.col(zscore_col).is_not_null() &
-                pl.col(zscore_col).is_finite() &
+                pl.col(percentile_col).is_not_null() &
                 favorable_condition
             )
             .then(1)
             .otherwise(0)
         )
 
-        # Add unfavorable condition with null/finite checks
+        # Add unfavorable condition with null check
         unfavorable_conditions.append(
             pl.when(
-                pl.col(zscore_col).is_not_null() &
-                pl.col(zscore_col).is_finite() &
+                pl.col(percentile_col).is_not_null() &
                 unfavorable_condition
             )
             .then(1)
@@ -102,7 +106,7 @@ def calculate_signal_counts(
 
         # Count available metrics
         available_conditions.append(
-            pl.when(pl.col(zscore_col).is_not_null() & pl.col(zscore_col).is_finite())
+            pl.when(pl.col(percentile_col).is_not_null())
             .then(1)
             .otherwise(0)
         )

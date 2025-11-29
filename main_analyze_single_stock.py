@@ -7,10 +7,9 @@ import polars as pl
 
 from fundamental_analysis.data_acquisition.data_reader import DataReader
 from fundamental_analysis.metrics import calculate_all_metrics
-from fundamental_analysis.scoring.melt import melt_and_classify_metrics
-from fundamental_analysis.scoring.z_score import ALL_METRICS, ZScoreOption, calculate_metric_z_scores
+from fundamental_analysis.scoring.common import ALL_METRICS, ScoreOption
+from fundamental_analysis.scoring.percentile_score import calculate_metric_percentiles
 from fundamental_analysis.segmentation.sector import add_sector_segmentation
-from fundamental_analysis.utils.config import Config
 from fundamental_analysis.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -31,6 +30,9 @@ METRIC_DESCRIPTIONS = {
 }
 
 
+PERCENTILE_THRESHOLD = 10.0
+
+
 def format_value(value, metric_name: str) -> str:
     """Format metric value for display."""
     if value is None:
@@ -40,34 +42,37 @@ def format_value(value, metric_name: str) -> str:
     return f"{value:.2f}"
 
 
-def format_zscore(zscore) -> str:
-    """Format z-score with direction indicator."""
-    if zscore is None:
+def format_percentile(percentile) -> str:
+    """Format percentile with indicator."""
+    if percentile is None:
         return "N/A"
-    if abs(zscore) >= 2.0:
+    if percentile <= PERCENTILE_THRESHOLD or percentile >= (100 - PERCENTILE_THRESHOLD):
         indicator = "**"
-    elif abs(zscore) >= 1.5:
+    elif percentile <= 20 or percentile >= 80:
         indicator = "*"
     else:
         indicator = ""
-    return f"{zscore:+.2f}{indicator}"
+    return f"{percentile:.1f}%{indicator}"
 
 
-def get_outlier_label(zscore, direction: str) -> str:
-    """Get outlier label based on z-score and metric direction."""
-    if zscore is None or abs(zscore) < 2.0:
+def get_outlier_label(percentile, direction: str) -> str:
+    """Get outlier label based on percentile and metric direction."""
+    if percentile is None:
         return ""
 
     if direction == "lower":
-        if zscore < -2.0:
+        # Lower is better (valuation, leverage)
+        if percentile <= PERCENTILE_THRESHOLD:
             return "[FAVORABLE]"
-        else:
+        elif percentile >= (100 - PERCENTILE_THRESHOLD):
             return "[UNFAVORABLE]"
     else:  # higher
-        if zscore > 2.0:
+        # Higher is better (profitability, liquidity)
+        if percentile >= (100 - PERCENTILE_THRESHOLD):
             return "[FAVORABLE]"
-        else:
+        elif percentile <= PERCENTILE_THRESHOLD:
             return "[UNFAVORABLE]"
+    return ""
 
 
 def analyze_stock(ticker: str, as_of_date: str, window_days: int = 180):
@@ -108,9 +113,9 @@ def analyze_stock(ticker: str, as_of_date: str, window_days: int = 180):
     # Add segmentation
     df = add_sector_segmentation(df)
 
-    # Calculate z-scores
-    option = ZScoreOption(window_days=window_days)
-    df = calculate_metric_z_scores(df, option=option)
+    # Calculate percentiles
+    option = ScoreOption(window_days=window_days)
+    df = calculate_metric_percentiles(df, option=option)
 
     # Filter to ticker and get most recent record as of as_of_date
     df_ticker = df.filter(
@@ -146,30 +151,27 @@ def analyze_stock(ticker: str, as_of_date: str, window_days: int = 180):
 
         for metric in metrics:
             value = row.get(metric)
-            zscore = row.get(f"{metric}_zscore")
-            mean = row.get(f"{metric}_mean")
-            std = row.get(f"{metric}_std")
+            percentile = row.get(f"{metric}_percentile")
+            population = row.get(f"{metric}_population")
             direction = metric_directions.get(metric, "lower")
 
             desc = METRIC_DESCRIPTIONS.get(metric, metric)
             value_str = format_value(value, metric)
-            zscore_str = format_zscore(zscore)
-            outlier_label = get_outlier_label(zscore, direction)
+            percentile_str = format_percentile(percentile)
+            outlier_label = get_outlier_label(percentile, direction)
 
-            # Format segment stats
-            if mean is not None and std is not None:
-                mean_str = format_value(mean, metric)
-                std_str = format_value(std, metric)
-                stats_str = f"(segment: mean={mean_str}, std={std_str})"
+            # Format population info
+            if population is not None:
+                pop_str = f"(n={population})"
             else:
-                stats_str = ""
+                pop_str = ""
 
             print(f"  {desc}")
-            print(f"    Value: {value_str}  |  Z-score: {zscore_str}  {stats_str} {outlier_label}")
+            print(f"    Value: {value_str}  |  Percentile: {percentile_str}  {pop_str} {outlier_label}")
 
     print("\n" + "-" * 70)
-    print(f"Z-scores calculated using {window_days}-day rolling window within segment")
-    print("Legend: * = notable (|z| >= 1.5), ** = outlier (|z| >= 2.0)")
+    print(f"Percentiles calculated using {window_days}-day rolling window within segment")
+    print(f"Legend: * = notable (<=20% or >=80%), ** = outlier (<={PERCENTILE_THRESHOLD}% or >={100-PERCENTILE_THRESHOLD}%)")
     print("[FAVORABLE] = outlier in good direction, [UNFAVORABLE] = outlier in bad direction")
     print("=" * 70)
 
@@ -194,7 +196,7 @@ def main():
         "--window-days",
         type=int,
         default=180,
-        help="Rolling window size in days for z-score calculation (default: 180)"
+        help="Rolling window size in days for percentile calculation (default: 180)"
     )
 
     args = parser.parse_args()
