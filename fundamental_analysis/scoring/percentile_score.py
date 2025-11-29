@@ -58,6 +58,21 @@ def _calculate_rolling_percentiles(
             .otherwise(None)
             .cast(pl.Int64)
             .alias(f"{metric}_population"),
+
+            pl.when(filter_cond)
+            .then(pl.col(metric).median().over(segment_col))
+            .otherwise(None)
+            .alias(f"{metric}_median"),
+
+            pl.when(filter_cond)
+            .then(pl.col(metric).quantile(0.1).over(segment_col))
+            .otherwise(None)
+            .alias(f"{metric}_p10"),
+
+            pl.when(filter_cond)
+            .then(pl.col(metric).quantile(0.9).over(segment_col))
+            .otherwise(None)
+            .alias(f"{metric}_p90"),
         ])
 
     return df

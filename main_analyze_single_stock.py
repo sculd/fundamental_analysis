@@ -153,21 +153,27 @@ def analyze_stock(ticker: str, as_of_date: str, window_days: int = 180):
             value = row.get(metric)
             percentile = row.get(f"{metric}_percentile")
             population = row.get(f"{metric}_population")
+            median = row.get(f"{metric}_median")
+            p10 = row.get(f"{metric}_p10")
+            p90 = row.get(f"{metric}_p90")
             direction = metric_directions.get(metric, "lower")
 
             desc = METRIC_DESCRIPTIONS.get(metric, metric)
             value_str = format_value(value, metric)
             percentile_str = format_percentile(percentile)
+            median_str = format_value(median, metric)
+            p10_str = format_value(p10, metric)
+            p90_str = format_value(p90, metric)
             outlier_label = get_outlier_label(percentile, direction)
 
-            # Format population info
+            # Format stats info
             if population is not None:
-                pop_str = f"(n={population})"
+                stats_str = f"(p10={p10_str}, med={median_str}, p90={p90_str}, n={population})"
             else:
-                pop_str = ""
+                stats_str = ""
 
             print(f"  {desc}")
-            print(f"    Value: {value_str}  |  Percentile: {percentile_str}  {pop_str} {outlier_label}")
+            print(f"    Value: {value_str}  |  Pctl: {percentile_str} {stats_str} {outlier_label}")
 
     print("\n" + "-" * 70)
     print(f"Percentiles calculated using {window_days}-day rolling window within segment")
