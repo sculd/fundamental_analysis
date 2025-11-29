@@ -4,57 +4,17 @@ Unlike z-scores which assume normal distribution, percentile ranks are
 distribution-agnostic and more intuitive for skewed financial ratios.
 """
 
-from dataclasses import dataclass
 from datetime import timedelta
 
 import polars as pl
 
-
-@dataclass
-class PercentileOption:
-    """Configuration for percentile calculation.
-
-    Parameters
-    ----------
-    window_days : int, default 180
-        Rolling window size in days for calculating segment statistics
-    segment_col : str, default "segment"
-        Column name for segmentation
-    date_col : str, default "datekey"
-        Column name for date
-    """
-
-    window_days: int = 180
-    segment_col: str = "segment"
-    date_col: str = "datekey"
-
-
-# Define all metrics with their favorable direction
-# Format: (metric_name, direction)
-# direction: "lower" = low values are good, "higher" = high values are good
-ALL_METRICS = [
-    # Valuation metrics (lower is better - cheaper)
-    ("pe_ratio", "lower"),
-    ("pb_ratio", "lower"),
-    ("ps_ratio", "lower"),
-    ("pc_ratio", "lower"),
-    ("ev_ebitda_ratio", "lower"),
-    # Profitability metrics (higher is better)
-    ("roe_calculated", "higher"),
-    ("roic_calculated", "higher"),
-    # Liquidity metrics (higher is better)
-    ("current_ratio", "higher"),
-    ("interest_coverage", "higher"),
-    # Leverage metrics (lower is better)
-    ("debt_to_equity", "lower"),
-    ("debt_to_assets", "lower"),
-]
+from fundamental_analysis.scoring.common import ALL_METRICS, ScoreOption
 
 
 def _calculate_rolling_percentiles(
     df: pl.DataFrame,
     metrics: list[str],
-    option: PercentileOption,
+    option: ScoreOption,
     positive_only_metrics: list[str] | None = None,
 ) -> pl.DataFrame:
     """
@@ -70,7 +30,7 @@ def _calculate_rolling_percentiles(
         Input data with metrics, segment, and datekey columns
     metrics : list[str]
         List of metric column names to calculate percentiles for
-    option : PercentileOption
+    option : ScoreOption
         Configuration for percentile calculation
     positive_only_metrics : list[str] | None, default None
         Metrics that should only use positive values for statistics.
@@ -169,7 +129,7 @@ def _calculate_rolling_percentiles(
 
 def calculate_metric_percentiles(
     df: pl.DataFrame,
-    option: PercentileOption | None = None,
+    option: ScoreOption | None = None,
 ) -> pl.DataFrame:
     """
     Calculate rolling percentile ranks for all standard fundamental metrics.
@@ -192,7 +152,7 @@ def calculate_metric_percentiles(
     ----------
     df : pl.DataFrame
         Input data with fundamental metrics, segment, and datekey columns
-    option : PercentileOption | None, default None
+    option : ScoreOption | None, default None
         Configuration for percentile calculation. If None, uses default values.
 
     Returns
@@ -207,7 +167,7 @@ def calculate_metric_percentiles(
         interest_coverage, debt_to_equity, debt_to_assets
     """
     if option is None:
-        option = PercentileOption()
+        option = ScoreOption()
 
     metric_names = [m[0] for m in ALL_METRICS]
 
