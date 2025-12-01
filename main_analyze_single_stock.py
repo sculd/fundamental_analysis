@@ -7,72 +7,13 @@ import polars as pl
 
 from fundamental_analysis.data_acquisition.data_reader import DataReader
 from fundamental_analysis.metrics import calculate_all_metrics
-from fundamental_analysis.scoring.common import ALL_METRICS, ScoreOption
+from fundamental_analysis.scoring.common import ScoreOption
+from fundamental_analysis.scoring.deepdive.single_stock import print_single_stock_analysis
 from fundamental_analysis.scoring.percentile_score import calculate_metric_percentiles
 from fundamental_analysis.segmentation.sector import add_sector_segmentation
 from fundamental_analysis.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
-
-# Metric descriptions for human-friendly output
-METRIC_DESCRIPTIONS = {
-    "pe_ratio": "Price-to-Earnings ratio (lower = cheaper)",
-    "pb_ratio": "Price-to-Book ratio (lower = cheaper)",
-    "ps_ratio": "Price-to-Sales ratio (lower = cheaper)",
-    "pc_ratio": "Price-to-Cash ratio (lower = cheaper)",
-    "ev_ebitda_ratio": "EV/EBITDA ratio (lower = cheaper)",
-    "roe_calculated": "Return on Equity (higher = better profitability)",
-    "roic_calculated": "Return on Invested Capital (higher = better profitability)",
-    "current_ratio": "Current Ratio (higher = better liquidity)",
-    "interest_coverage": "Interest Coverage (higher = better debt serviceability)",
-    "debt_to_equity": "Debt-to-Equity (lower = less leveraged)",
-    "debt_to_assets": "Debt-to-Assets (lower = less leveraged)",
-}
-
-
-PERCENTILE_THRESHOLD = 10.0
-
-
-def format_value(value, metric_name: str) -> str:
-    """Format metric value for display."""
-    if value is None:
-        return "N/A"
-    if metric_name in ("roe_calculated", "roic_calculated", "debt_to_assets"):
-        return f"{value:.1%}"
-    return f"{value:.2f}"
-
-
-def format_percentile(percentile) -> str:
-    """Format percentile with indicator."""
-    if percentile is None:
-        return "N/A"
-    if percentile <= PERCENTILE_THRESHOLD or percentile >= (100 - PERCENTILE_THRESHOLD):
-        indicator = "**"
-    elif percentile <= 20 or percentile >= 80:
-        indicator = "*"
-    else:
-        indicator = ""
-    return f"{percentile:.1f}%{indicator}"
-
-
-def get_outlier_label(percentile, direction: str) -> str:
-    """Get outlier label based on percentile and metric direction."""
-    if percentile is None:
-        return ""
-
-    if direction == "lower":
-        # Lower is better (valuation, leverage)
-        if percentile <= PERCENTILE_THRESHOLD:
-            return "[FAVORABLE]"
-        elif percentile >= (100 - PERCENTILE_THRESHOLD):
-            return "[UNFAVORABLE]"
-    else:  # higher
-        # Higher is better (profitability, liquidity)
-        if percentile >= (100 - PERCENTILE_THRESHOLD):
-            return "[FAVORABLE]"
-        elif percentile <= PERCENTILE_THRESHOLD:
-            return "[UNFAVORABLE]"
-    return ""
 
 
 def analyze_stock(ticker: str, as_of_date: str, window_days: int = 180):
@@ -129,57 +70,8 @@ def analyze_stock(ticker: str, as_of_date: str, window_days: int = 180):
 
     row = df_ticker.to_dicts()[0]
 
-    # Display header
-    print("\n" + "=" * 70)
-    print(f"  {ticker} - Fundamental Analysis")
-    print(f"  As of: {row['datekey']} | Segment: {row.get('segment', 'N/A')}")
-    print("=" * 70)
-
-    # Group metrics by category
-    categories = {
-        "Valuation": ["pe_ratio", "pb_ratio", "ps_ratio", "pc_ratio", "ev_ebitda_ratio"],
-        "Profitability": ["roe_calculated", "roic_calculated"],
-        "Liquidity": ["current_ratio", "interest_coverage"],
-        "Leverage": ["debt_to_equity", "debt_to_assets"],
-    }
-
-    metric_directions = {name: direction for name, direction in ALL_METRICS}
-
-    for category, metrics in categories.items():
-        print(f"\n{category}:")
-        print("-" * 70)
-
-        for metric in metrics:
-            value = row.get(metric)
-            percentile = row.get(f"{metric}_percentile")
-            population = row.get(f"{metric}_population")
-            median = row.get(f"{metric}_median")
-            p10 = row.get(f"{metric}_p10")
-            p90 = row.get(f"{metric}_p90")
-            direction = metric_directions.get(metric, "lower")
-
-            desc = METRIC_DESCRIPTIONS.get(metric, metric)
-            value_str = format_value(value, metric)
-            percentile_str = format_percentile(percentile)
-            median_str = format_value(median, metric)
-            p10_str = format_value(p10, metric)
-            p90_str = format_value(p90, metric)
-            outlier_label = get_outlier_label(percentile, direction)
-
-            # Format stats info
-            if population is not None:
-                stats_str = f"(p10={p10_str}, med={median_str}, p90={p90_str}, n={population})"
-            else:
-                stats_str = ""
-
-            print(f"  {desc}")
-            print(f"    Value: {value_str}  |  Pctl: {percentile_str} {stats_str} {outlier_label}")
-
-    print("\n" + "-" * 70)
-    print(f"Percentiles calculated using {window_days}-day rolling window within segment")
-    print(f"Legend: * = notable (<=20% or >=80%), ** = outlier (<={PERCENTILE_THRESHOLD}% or >={100-PERCENTILE_THRESHOLD}%)")
-    print("[FAVORABLE] = outlier in good direction, [UNFAVORABLE] = outlier in bad direction")
-    print("=" * 70)
+    # Print analysis
+    print_single_stock_analysis(row, ticker)
 
 
 def main():
