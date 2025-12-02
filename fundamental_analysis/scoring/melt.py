@@ -35,7 +35,7 @@ class OutlierSummaryFilter:
 def melt_and_classify_metrics(
     df: pl.DataFrame,
     tickers: list[str] | None = None,
-    percentile_threshold: float = 10.0,
+    percentile_threshold: float = 90.0,
     filter_config: OutlierSummaryFilter | None = None,
 ) -> pl.DataFrame:
     """
@@ -63,10 +63,11 @@ def melt_and_classify_metrics(
         calculate_metric_percentiles() or calculate_signal_counts().
     tickers : list[str] | None, default None
         If provided, filter to only these tickers
-    percentile_threshold : float, default 10.0
+    percentile_threshold : float, default 90.0
         Percentile threshold for outlier detection (0-100).
-        For "lower is better" metrics: favorable if <= threshold
-        For "higher is better" metrics: favorable if >= (100 - threshold)
+        90 means top/bottom 10% are outliers.
+        For "lower is better" metrics: favorable if <= (100 - threshold)
+        For "higher is better" metrics: favorable if >= threshold
     filter_config : OutlierSummaryFilter | None, default None
         If provided, filter results based on outlier status and/or direction.
         If None, return all metrics without filtering.
@@ -97,24 +98,27 @@ def melt_and_classify_metrics(
             outlier_direction = None
 
             if percentile is not None:
+                # percentile_threshold=90 means top/bottom 10% are outliers
+                outlier_cutoff = 100 - percentile_threshold  # e.g., 10 when threshold=90
+
                 if metric_direction == "lower":
                     # Lower is better (valuation, leverage)
-                    # Favorable: low percentile (bottom X%)
-                    # Unfavorable: high percentile (top X%)
-                    if percentile <= percentile_threshold:
+                    # Favorable: low percentile (bottom X%) = <= outlier_cutoff
+                    # Unfavorable: high percentile (top X%) = >= threshold
+                    if percentile <= outlier_cutoff:
                         is_outlier = True
                         outlier_direction = "favorable"
-                    elif percentile >= (100 - percentile_threshold):
+                    elif percentile >= percentile_threshold:
                         is_outlier = True
                         outlier_direction = "unfavorable"
                 else:  # metric_direction == "higher"
                     # Higher is better (profitability, liquidity)
-                    # Favorable: high percentile (top X%)
-                    # Unfavorable: low percentile (bottom X%)
-                    if percentile >= (100 - percentile_threshold):
+                    # Favorable: high percentile (top X%) = >= threshold
+                    # Unfavorable: low percentile (bottom X%) = <= outlier_cutoff
+                    if percentile >= percentile_threshold:
                         is_outlier = True
                         outlier_direction = "favorable"
-                    elif percentile <= percentile_threshold:
+                    elif percentile <= outlier_cutoff:
                         is_outlier = True
                         outlier_direction = "unfavorable"
 

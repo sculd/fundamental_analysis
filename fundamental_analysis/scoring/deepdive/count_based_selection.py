@@ -9,7 +9,7 @@ from fundamental_analysis.scoring.percentile_score import calculate_metric_perce
 def calculate_signal_counts(
     df: pl.DataFrame,
     option: ScoreOption | None = None,
-    percentile_threshold: float = 10.0,
+    percentile_threshold: float = 90.0,
     min_total_signal_count: int = 0,
 ) -> pl.DataFrame:
     """
@@ -19,14 +19,14 @@ def calculate_signal_counts(
     with outlier counting logic. Treats all metrics equally, counting outliers in
     both favorable and unfavorable directions.
 
-    Each metric has a defined "good" direction:
-    - Valuation ratios: lower is better (cheap) - favorable if <= percentile_threshold
-    - Profitability: higher is better - favorable if >= (100 - percentile_threshold)
-    - Liquidity: higher is better - favorable if >= (100 - percentile_threshold)
-    - Leverage: lower is better - favorable if <= percentile_threshold
+    Each metric has a defined "good" direction (threshold=90 means top/bottom 10%):
+    - Valuation ratios: lower is better (cheap) - favorable if <= (100 - threshold)
+    - Profitability: higher is better - favorable if >= threshold
+    - Liquidity: higher is better - favorable if >= threshold
+    - Leverage: lower is better - favorable if <= (100 - threshold)
 
     Example:
-        df = calculate_signal_counts(df, percentile_threshold=10.0, min_total_signal_count=1)
+        df = calculate_signal_counts(df, percentile_threshold=90.0, min_total_signal_count=1)
 
         Result:
         | ticker | favorable_count | unfavorable_count | total_signal_count | net_signal |
@@ -40,9 +40,9 @@ def calculate_signal_counts(
         Input data with fundamental metrics
     option : ScoreOption | None, default None
         Configuration for percentile calculation. If None, uses default values.
-    percentile_threshold : float, default 10.0
+    percentile_threshold : float, default 90.0
         Percentile threshold for outlier detection (0-100).
-        Favorable outliers are in top/bottom percentile_threshold% depending on metric direction.
+        90 means top/bottom 10% are outliers.
     min_total_signal_count : int, default 0
         Minimum total_signal_count to include in results. Rows with fewer signals are filtered out.
 
@@ -67,22 +67,25 @@ def calculate_signal_counts(
     unfavorable_conditions = []
     available_conditions = []
 
+    # percentile_threshold=90 means top/bottom 10% are outliers
+    outlier_cutoff = 100 - percentile_threshold  # e.g., 10 when threshold=90
+
     for metric_name, direction in ALL_METRICS:
         percentile_col = f"{metric_name}_percentile"
 
         # Determine comparison based on metric direction
         if direction == "lower":
             # Lower is better (valuation, leverage)
-            # Favorable: low percentile (bottom X%)
-            # Unfavorable: high percentile (top X%)
-            favorable_condition = pl.col(percentile_col) <= percentile_threshold
-            unfavorable_condition = pl.col(percentile_col) >= (100 - percentile_threshold)
+            # Favorable: low percentile (bottom X%) = <= outlier_cutoff
+            # Unfavorable: high percentile (top X%) = >= threshold
+            favorable_condition = pl.col(percentile_col) <= outlier_cutoff
+            unfavorable_condition = pl.col(percentile_col) >= percentile_threshold
         else:  # direction == "higher"
             # Higher is better (profitability, liquidity)
-            # Favorable: high percentile (top X%)
-            # Unfavorable: low percentile (bottom X%)
-            favorable_condition = pl.col(percentile_col) >= (100 - percentile_threshold)
-            unfavorable_condition = pl.col(percentile_col) <= percentile_threshold
+            # Favorable: high percentile (top X%) = >= threshold
+            # Unfavorable: low percentile (bottom X%) = <= outlier_cutoff
+            favorable_condition = pl.col(percentile_col) >= percentile_threshold
+            unfavorable_condition = pl.col(percentile_col) <= outlier_cutoff
 
         # Add favorable condition with null check
         favorable_conditions.append(

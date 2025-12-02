@@ -25,7 +25,7 @@ METRIC_CATEGORIES = {
     "Leverage": ["debt_to_equity", "debt_to_assets"],
 }
 
-PERCENTILE_THRESHOLD = 10.0
+PERCENTILE_THRESHOLD = 90.0
 
 
 def format_value(value, metric_name: str) -> str:
@@ -38,10 +38,11 @@ def format_value(value, metric_name: str) -> str:
 
 
 def format_percentile(percentile, threshold: float = PERCENTILE_THRESHOLD) -> str:
-    """Format percentile with indicator."""
+    """Format percentile with indicator. threshold=90 means top/bottom 10% are outliers."""
     if percentile is None:
         return "N/A"
-    if percentile <= threshold or percentile >= (100 - threshold):
+    outlier_cutoff = 100 - threshold  # e.g., 10 when threshold=90
+    if percentile <= outlier_cutoff or percentile >= threshold:
         indicator = "**"
     elif percentile <= 20 or percentile >= 80:
         indicator = "*"
@@ -51,21 +52,26 @@ def format_percentile(percentile, threshold: float = PERCENTILE_THRESHOLD) -> st
 
 
 def get_outlier_label(percentile, direction: str, threshold: float = PERCENTILE_THRESHOLD) -> str:
-    """Get outlier label based on percentile and metric direction."""
+    """Get outlier label based on percentile and metric direction.
+
+    threshold=90 means top/bottom 10% are outliers.
+    """
     if percentile is None:
         return ""
 
+    outlier_cutoff = 100 - threshold  # e.g., 10 when threshold=90
+
     if direction == "lower":
         # Lower is better (valuation, leverage)
-        if percentile <= threshold:
+        if percentile <= outlier_cutoff:
             return "[FAVORABLE]"
-        elif percentile >= (100 - threshold):
+        elif percentile >= threshold:
             return "[UNFAVORABLE]"
     else:  # higher
         # Higher is better (profitability, liquidity)
-        if percentile >= (100 - threshold):
+        if percentile >= threshold:
             return "[FAVORABLE]"
-        elif percentile <= threshold:
+        elif percentile <= outlier_cutoff:
             return "[UNFAVORABLE]"
     return ""
 
@@ -127,7 +133,8 @@ def print_single_stock_analysis(
             print(f"  {desc}")
             print(f"    Value: {value_str}  |  Pctl: {percentile_str} {stats_str} {outlier_label}")
 
+    outlier_cutoff = 100 - percentile_threshold  # e.g., 10 when threshold=90
     print("\n" + "-" * 70)
-    print(f"Legend: * = notable (<=20% or >=80%), ** = outlier (<={percentile_threshold}% or >={100-percentile_threshold}%)")
+    print(f"Legend: * = notable (<=20% or >=80%), ** = outlier (<={outlier_cutoff}% or >={percentile_threshold}%)")
     print("[FAVORABLE] = outlier in good direction, [UNFAVORABLE] = outlier in bad direction")
     print("=" * 70)

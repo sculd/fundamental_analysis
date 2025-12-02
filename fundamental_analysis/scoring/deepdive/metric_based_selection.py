@@ -11,7 +11,7 @@ def get_stocks_with_metric_outlier(
     df: pl.DataFrame,
     metric_name: str,
     option: ScoreOption | None = None,
-    percentile_threshold: float = 10.0,
+    percentile_threshold: float = 90.0,
     direction: str = "favorable",
     min_stocks: int = 5,
     melt: bool = True,
@@ -51,10 +51,11 @@ def get_stocks_with_metric_outlier(
         Name of metric to filter on (e.g., "pe_ratio", "roe_calculated")
     option : ScoreOption | None, default None
         Configuration for percentile calculation. If None, uses default values.
-    percentile_threshold : float, default 10.0
+    percentile_threshold : float, default 90.0
         Percentile threshold for outlier detection (0-100).
-        For "lower is better" metrics: favorable if <= threshold
-        For "higher is better" metrics: favorable if >= (100 - threshold)
+        90 means top/bottom 10% are outliers.
+        For "lower is better" metrics: favorable if <= (100 - threshold)
+        For "higher is better" metrics: favorable if >= threshold
     direction : str, default "favorable"
         "favorable" or "unfavorable"
     min_stocks : int, default 5
@@ -84,30 +85,32 @@ def get_stocks_with_metric_outlier(
         df = calculate_metric_percentiles(df, option=option)
 
     # Determine sort direction and outlier condition based on favorable/unfavorable and metric direction
+    # percentile_threshold=90 means top/bottom 10% are outliers
+    #
     # For "lower is better" metrics (valuation, leverage):
-    #   - Favorable = low percentile (cheap/low leverage)
-    #   - Unfavorable = high percentile (expensive/high leverage)
+    #   - Favorable = low percentile (cheap/low leverage) = <= (100 - threshold)
+    #   - Unfavorable = high percentile (expensive/high leverage) = >= threshold
     # For "higher is better" metrics (profitability, liquidity):
-    #   - Favorable = high percentile (good profitability)
-    #   - Unfavorable = low percentile (poor profitability)
+    #   - Favorable = high percentile (good profitability) = >= threshold
+    #   - Unfavorable = low percentile (poor profitability) = <= (100 - threshold)
 
     if direction == "favorable":
         if metric_direction == "lower":
-            # Lower is better, favorable = low percentile
-            outlier_condition = pl.col(percentile_col) <= percentile_threshold
+            # Lower is better, favorable = low percentile (e.g., <= 10 when threshold=90)
+            outlier_condition = pl.col(percentile_col) <= (100 - percentile_threshold)
             sort_descending = False  # Lowest percentile first
         else:
-            # Higher is better, favorable = high percentile
-            outlier_condition = pl.col(percentile_col) >= (100 - percentile_threshold)
+            # Higher is better, favorable = high percentile (e.g., >= 90 when threshold=90)
+            outlier_condition = pl.col(percentile_col) >= percentile_threshold
             sort_descending = True  # Highest percentile first
     else:  # unfavorable
         if metric_direction == "lower":
-            # Lower is better, unfavorable = high percentile
-            outlier_condition = pl.col(percentile_col) >= (100 - percentile_threshold)
+            # Lower is better, unfavorable = high percentile (e.g., >= 90 when threshold=90)
+            outlier_condition = pl.col(percentile_col) >= percentile_threshold
             sort_descending = True  # Highest percentile first
         else:
-            # Higher is better, unfavorable = low percentile
-            outlier_condition = pl.col(percentile_col) <= percentile_threshold
+            # Higher is better, unfavorable = low percentile (e.g., <= 10 when threshold=90)
+            outlier_condition = pl.col(percentile_col) <= (100 - percentile_threshold)
             sort_descending = False  # Lowest percentile first
 
     # Filter to outliers
