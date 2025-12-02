@@ -4,7 +4,8 @@ import polars as pl
 
 from fundamental_analysis.scoring.common import ALL_METRICS, ScoreOption
 from fundamental_analysis.scoring.melt import melt_and_classify_metrics
-from fundamental_analysis.scoring.percentile_score import calculate_metric_percentiles
+from fundamental_analysis.scoring.percentile_score import \
+    calculate_metric_percentiles
 
 
 def get_stocks_with_metric_outlier(

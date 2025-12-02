@@ -8,10 +8,13 @@ import polars as pl
 from fundamental_analysis.data_acquisition.data_reader import DataReader
 from fundamental_analysis.metrics import calculate_all_metrics
 from fundamental_analysis.scoring.common import ALL_METRICS, ScoreOption
-from fundamental_analysis.scoring.deepdive.metric_based_selection import get_stocks_with_metric_outlier
-from fundamental_analysis.scoring.deepdive.single_stock import print_single_stock_analysis
+from fundamental_analysis.scoring.deepdive.metric_based_selection import \
+    get_stocks_with_metric_outlier
+from fundamental_analysis.scoring.deepdive.single_stock import \
+    print_single_stock_analysis
 from fundamental_analysis.scoring.melt import melt_and_classify_metrics
-from fundamental_analysis.scoring.percentile_score import calculate_metric_percentiles
+from fundamental_analysis.scoring.percentile_score import \
+    calculate_metric_percentiles
 from fundamental_analysis.segmentation.sector import add_sector_segmentation
 from fundamental_analysis.utils.logger import setup_logger
 

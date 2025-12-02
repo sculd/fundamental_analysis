@@ -3,7 +3,8 @@
 import polars as pl
 
 from fundamental_analysis.scoring.common import ALL_METRICS, ScoreOption
-from fundamental_analysis.scoring.percentile_score import calculate_metric_percentiles
+from fundamental_analysis.scoring.percentile_score import \
+    calculate_metric_percentiles
 
 
 def calculate_signal_counts(

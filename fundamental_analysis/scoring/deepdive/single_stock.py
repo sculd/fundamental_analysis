@@ -76,13 +76,13 @@ def get_outlier_label(percentile, direction: str, threshold: float = PERCENTILE_
     return ""
 
 
-def print_single_stock_analysis(
+def format_single_stock_analysis(
     row: dict,
     ticker: str,
     percentile_threshold: float = PERCENTILE_THRESHOLD,
-) -> None:
+) -> str:
     """
-    Print formatted analysis for a single stock.
+    Format analysis for a single stock as a string.
 
     Parameters
     ----------
@@ -92,20 +92,26 @@ def print_single_stock_analysis(
         {metric}_median, {metric}_p10, {metric}_p90, datekey, segment
     ticker : str
         Stock ticker symbol
-    percentile_threshold : float, default 10.0
-        Threshold for outlier detection (top/bottom X%)
+    percentile_threshold : float, default 90.0
+        Threshold for outlier detection. 90 means top/bottom 10% are outliers.
+
+    Returns
+    -------
+    str
+        Formatted analysis string
     """
     metric_directions = {name: direction for name, direction in ALL_METRICS}
+    lines = []
 
-    # Display header
-    print("\n" + "=" * 70)
-    print(f"  {ticker} - Fundamental Analysis")
-    print(f"  As of: {row.get('datekey', 'N/A')} | Segment: {row.get('segment', 'N/A')}")
-    print("=" * 70)
+    # Header
+    lines.append("=" * 70)
+    lines.append(f"  {ticker} - Fundamental Analysis")
+    lines.append(f"  As of: {row.get('datekey', 'N/A')} | Segment: {row.get('segment', 'N/A')}")
+    lines.append("=" * 70)
 
     for category, metrics in METRIC_CATEGORIES.items():
-        print(f"\n{category}:")
-        print("-" * 70)
+        lines.append(f"\n{category}:")
+        lines.append("-" * 70)
 
         for metric in metrics:
             value = row.get(metric)
@@ -130,11 +136,22 @@ def print_single_stock_analysis(
             else:
                 stats_str = ""
 
-            print(f"  {desc}")
-            print(f"    Value: {value_str}  |  Pctl: {percentile_str} {stats_str} {outlier_label}")
+            lines.append(f"  {desc}")
+            lines.append(f"    Value: {value_str}  |  Pctl: {percentile_str} {stats_str} {outlier_label}")
 
     outlier_cutoff = 100 - percentile_threshold  # e.g., 10 when threshold=90
-    print("\n" + "-" * 70)
-    print(f"Legend: * = notable (<=20% or >=80%), ** = outlier (<={outlier_cutoff}% or >={percentile_threshold}%)")
-    print("[FAVORABLE] = outlier in good direction, [UNFAVORABLE] = outlier in bad direction")
-    print("=" * 70)
+    lines.append("\n" + "-" * 70)
+    lines.append(f"Legend: * = notable (<=20% or >=80%), ** = outlier (<={outlier_cutoff}% or >={percentile_threshold}%)")
+    lines.append("[FAVORABLE] = outlier in good direction, [UNFAVORABLE] = outlier in bad direction")
+    lines.append("=" * 70)
+
+    return "\n".join(lines)
+
+
+def print_single_stock_analysis(
+    row: dict,
+    ticker: str,
+    percentile_threshold: float = PERCENTILE_THRESHOLD,
+) -> None:
+    """Print formatted analysis for a single stock."""
+    print(format_single_stock_analysis(row, ticker, percentile_threshold))
