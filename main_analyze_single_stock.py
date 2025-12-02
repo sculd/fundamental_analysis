@@ -3,20 +3,48 @@
 import argparse
 from datetime import datetime, timedelta
 
+import anthropic
 import polars as pl
 
 from fundamental_analysis.data_acquisition.data_reader import DataReader
 from fundamental_analysis.metrics import calculate_all_metrics
 from fundamental_analysis.scoring.common import ScoreOption
-from fundamental_analysis.scoring.deepdive.single_stock import print_single_stock_analysis
-from fundamental_analysis.scoring.percentile_score import calculate_metric_percentiles
+from fundamental_analysis.scoring.deepdive.single_stock import (
+    format_single_stock_analysis, print_single_stock_analysis)
+from fundamental_analysis.scoring.percentile_score import \
+    calculate_metric_percentiles
 from fundamental_analysis.segmentation.sector import add_sector_segmentation
 from fundamental_analysis.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
 
-def analyze_stock(ticker: str, as_of_date: str, window_days: int = 180):
+def get_llm_analysis(ticker: str, metrics_str: str) -> str:
+    """Get Claude's analysis of the stock using Anthropic API."""
+
+    client = anthropic.Anthropic()  # Uses ANTHROPIC_API_KEY env var
+
+    prompt = f"""Let's talk about the stock whose ticker is {ticker}. Is it a sound company? I want you to provide a succinct description, point out the critical points.
+To help the analysis, these are some metrics i calculated using sf1 data:
+
+{metrics_str}"""
+
+    message = client.messages.create(
+        model="claude-opus-4-20250514",
+        max_tokens=4096,
+        tools=[{"type": "web_search_20250305", "name": "web_search"}],
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    # Extract text from response (may include web search results)
+    text_parts = []
+    for block in message.content:
+        if block.type == "text":
+            text_parts.append(block.text)
+    return "\n".join(text_parts)
+
+
+def analyze_stock(ticker: str, as_of_date: str, window_days: int = 180, use_llm: bool = False):
     """Analyze a single stock's metrics at a point in time."""
     reader = DataReader()
 
@@ -70,8 +98,17 @@ def analyze_stock(ticker: str, as_of_date: str, window_days: int = 180):
 
     row = df_ticker.to_dicts()[0]
 
-    # Print analysis
-    print_single_stock_analysis(row, ticker)
+    # Format and print analysis
+    metrics_str = format_single_stock_analysis(row, ticker)
+    print(metrics_str)
+
+    # Get LLM analysis if requested
+    if use_llm:
+        print("\n" + "=" * 70)
+        print("  Claude's Analysis")
+        print("=" * 70 + "\n")
+        llm_response = get_llm_analysis(ticker, metrics_str)
+        print(llm_response)
 
 
 def main():
@@ -96,13 +133,19 @@ def main():
         default=180,
         help="Rolling window size in days for percentile calculation (default: 180)"
     )
+    parser.add_argument(
+        "--llm",
+        action="store_true",
+        help="Get Claude's analysis of the stock (requires ANTHROPIC_API_KEY)"
+    )
 
     args = parser.parse_args()
 
     analyze_stock(
         ticker=args.ticker.upper(),
         as_of_date=args.as_of_date,
-        window_days=args.window_days
+        window_days=args.window_days,
+        use_llm=args.llm,
     )
 
 
