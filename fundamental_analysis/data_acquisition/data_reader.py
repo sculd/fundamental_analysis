@@ -25,31 +25,16 @@ class DataReader:
         """
         Read ticker metadata.
 
-        Finds the most recent tickers file with date <= snapshot_date.
+        Uses the most recent tickers file available.
         """
-        end_dt = datetime.strptime(snapshot_date, "%Y-%m-%d")
-
         # Find all tickers files
         tickers_files = sorted(Config.TICKERS_DIR.glob("tickers_snapshot_*.parquet"))
 
         if not tickers_files:
             raise FileNotFoundError(f"No tickers files found in {Config.TICKERS_DIR}")
 
-        # Find the most recent file with date <= snapshot_date
-        selected_file = None
-        for file_path in tickers_files:
-            file_date_str = file_path.stem.replace("tickers_snapshot_", "")
-            file_dt = datetime.strptime(file_date_str, "%Y-%m-%d")
-
-            if file_dt <= end_dt:
-                selected_file = file_path
-            else:
-                break
-
-        if selected_file is None:
-            raise FileNotFoundError(
-                f"No tickers file found with date <= {snapshot_date}"
-            )
+        # Use the most recent tickers file
+        selected_file = tickers_files[-1]
 
         logger.info(f"Reading tickers from {selected_file.name}")
         return pl.read_parquet(selected_file)
@@ -76,26 +61,15 @@ class DataReader:
         end_dt = datetime.strptime(end_date, "%Y-%m-%d")
         start_dt = datetime.strptime(start_date, "%Y-%m-%d")
 
-        # Find the most recent snapshot file with date <= end_date
+        # Find the most recent snapshot file (contains all historical data)
         snapshot_files = sorted(Config.SF1_DIR.glob("sf1_snapshot_*.parquet"))
 
         if not snapshot_files:
             raise FileNotFoundError(f"No SF1 snapshot files found in {Config.SF1_DIR}")
 
-        selected_file = None
-        for file_path in snapshot_files:
-            file_date_str = file_path.stem.replace("sf1_snapshot_", "")
-            file_dt = datetime.strptime(file_date_str, "%Y-%m-%d")
-
-            if file_dt <= end_dt:
-                selected_file = file_path
-            else:
-                break
-
-        if selected_file is None:
-            raise FileNotFoundError(
-                f"No SF1 snapshot file found with date <= {end_date}"
-            )
+        # Use the most recent snapshot - it contains all historical data
+        # Point-in-time filtering is done via datekey column
+        selected_file = snapshot_files[-1]
 
         logger.info(f"Reading SF1 from {selected_file.name}")
         df = pl.read_parquet(selected_file)

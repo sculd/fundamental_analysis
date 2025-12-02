@@ -19,13 +19,13 @@ from fundamental_analysis.utils.logger import setup_logger
 logger = setup_logger(__name__)
 
 
-def get_llm_analysis(ticker: str, metrics_str: str) -> str:
+def get_llm_analysis(ticker: str, as_of_date_str: str, metrics_str: str) -> str:
     """Get Claude's analysis of the stock using Anthropic API."""
 
     client = anthropic.Anthropic()  # Uses ANTHROPIC_API_KEY env var
 
     prompt = f"""Let's talk about the stock whose ticker is {ticker}. Is it a sound company? I want you to provide a succinct description, point out the critical points.
-To help the analysis, these are some metrics i calculated using sf1 data:
+To help the analysis, these are the metrics as of {as_of_date_str} I calculated using sf1 data:
 
 {metrics_str}"""
 
@@ -107,7 +107,7 @@ def analyze_stock(ticker: str, as_of_date: str, window_days: int = 180, use_llm:
         print("\n" + "=" * 70)
         print("  Claude's Analysis")
         print("=" * 70 + "\n")
-        llm_response = get_llm_analysis(ticker, metrics_str)
+        llm_response = get_llm_analysis(ticker, as_of_date, metrics_str)
         print(llm_response)
 
 
