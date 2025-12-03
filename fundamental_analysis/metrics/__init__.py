@@ -10,8 +10,6 @@ from fundamental_analysis.metrics.financial_health import (
 from fundamental_analysis.metrics.fundamental_ratios import (
     get_fundamental_ratio_growth_expressions,
     get_fundamental_ratio_snapshot_expressions)
-from fundamental_analysis.metrics.price_metrics.price_metric import (
-    calculate_price_metrics)
 from fundamental_analysis.metrics.profitability import (
     get_profitability_growth_expressions,
     get_profitability_snapshot_expressions)
