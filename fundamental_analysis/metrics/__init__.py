@@ -10,6 +10,8 @@ from fundamental_analysis.metrics.financial_health import (
 from fundamental_analysis.metrics.fundamental_ratios import (
     get_fundamental_ratio_growth_expressions,
     get_fundamental_ratio_snapshot_expressions)
+from fundamental_analysis.metrics.price_metrics.price_metric import (
+    calculate_price_metrics)
 from fundamental_analysis.metrics.profitability import (
     get_profitability_growth_expressions,
     get_profitability_snapshot_expressions)
@@ -20,19 +22,35 @@ from fundamental_analysis.metrics.size_features import (
 # Identifiers to keep from SF1 data
 IDENTIFIER_COLUMNS = ["ticker", "reportperiod", "datekey", "calendardate"]
 
+# Price metric columns from SEP data
+PRICE_METRIC_COLUMNS = [
+    "closeadj", "price_1y_ago", "return_1y",
+    "price_5y_ago", "return_5y_or_longest", "return_period_days",
+    "max_drawdown_1y", "max_drawdown_5y",
+    "high_5y", "pct_from_high_5y",
+    "low_5y", "pct_from_low_5y",
+    "volatility_1y",
+    "sma_200", "pct_from_sma_200",
+]
+
 
 def calculate_all_metrics(
     df: pl.DataFrame,
+    df_sep: pl.DataFrame | None = None,
     include_snapshot_metrics: bool = True,
     include_growth_metrics: bool = True,
+    include_price_metrics: bool = True,
 ) -> pl.DataFrame:
     """
     Calculate all available metrics in single pass.
 
     Args:
         df: Input DataFrame with SF1 fundamental data
+        df_sep: Optional SEP price data for price metrics. If provided and
+            include_price_metrics=True, price metrics are joined on (ticker, datekey).
         include_snapshot_metrics: If True, include snapshot (non-temporal) metrics
         include_growth_metrics: If True, include growth (temporal) metrics
+        include_price_metrics: If True and df_sep provided, include price-based metrics
 
     Metrics included:
     - Size features (marketcap, revenue, assets + growth QoQ/YoY)
@@ -40,6 +58,7 @@ def calculate_all_metrics(
     - Financial health (debt-to-equity, current ratio, debt-to-assets, interest coverage + growth QoQ/YoY)
     - Profitability (ROE, ROIC + growth QoQ/YoY)
     - Earnings (EPS growth QoQ/YoY)
+    - Price metrics (returns, drawdowns, volatility - if df_sep provided)
 
     All calculations happen in a single pass for maximum efficiency.
 
@@ -83,8 +102,27 @@ def calculate_all_metrics(
 
     # Select: identifiers + size features (raw) + calculated metrics
     # Note: SIZE_FEATURE_RAW_COLUMNS must be explicitly included since they exist in input df
-    return df_with_metrics.select(
+    result = df_with_metrics.select(
         IDENTIFIER_COLUMNS +
         SIZE_FEATURE_RAW_COLUMNS +
         metric_columns
     )
+
+    # Join price metrics if SEP data provided
+    if df_sep is not None and include_price_metrics:
+        df_price = calculate_price_metrics(df_sep)
+
+        # Select only the columns we need for join
+        df_price = df_price.select(
+            ["ticker", "date"] + PRICE_METRIC_COLUMNS
+        )
+
+        # Left join on ticker and datekey=date
+        result = result.join(
+            df_price,
+            left_on=["ticker", "datekey"],
+            right_on=["ticker", "date"],
+            how="left",
+        )
+
+    return result

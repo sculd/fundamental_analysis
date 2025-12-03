@@ -46,8 +46,9 @@ def calculate_price_metrics(df_sep: pl.DataFrame) -> pl.DataFrame:
     days_5y = TRADING_DAYS_PER_YEAR * 5
     days_200 = 200
 
-    # 1-year return
+    # 1-year return with base price
     df = df.with_columns([
+        pl.col("closeadj").shift(days_1y).over("ticker").alias("_price_1y_ago"),
         (pl.col("closeadj") / pl.col("closeadj").shift(days_1y).over("ticker") - 1)
         .alias("return_1y")
     ])
@@ -135,13 +136,14 @@ def calculate_price_metrics(df_sep: pl.DataFrame) -> pl.DataFrame:
         (pl.col("closeadj") / pl.col("_sma_200") - 1).alias("pct_from_sma_200")
     ])
 
-    # Select final columns (drop intermediate ones starting with _)
-    result_cols = [
+    # Select final columns, renaming underscore-prefixed temps to output names
+    return df.select([
         "ticker", "date", "closeadj",
-        "return_1y", "return_5y_or_longest", "return_period_days",
+        pl.col("_price_1y_ago").alias("price_1y_ago"), "return_1y",
+        pl.col("_price_5y_ago").alias("price_5y_ago"), "return_5y_or_longest", "return_period_days",
         "max_drawdown_1y", "max_drawdown_5y",
-        "pct_from_high_5y", "pct_from_low_5y",
-        "volatility_1y", "pct_from_sma_200",
-    ]
-
-    return df.select(result_cols)
+        pl.col("_high_5y").alias("high_5y"), "pct_from_high_5y",
+        pl.col("_low_5y").alias("low_5y"), "pct_from_low_5y",
+        "volatility_1y",
+        pl.col("_sma_200").alias("sma_200"), "pct_from_sma_200",
+    ])

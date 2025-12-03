@@ -59,6 +59,8 @@ def analyze_stock(ticker: str, as_of_date: str, window_days: int = 180, use_llm:
 
     # Load data: need window_days before as_of_date for rolling stats
     start_date = (as_of_dt - timedelta(days=window_days + 365)).strftime("%Y-%m-%d")
+    # For price metrics, need 5 years of history
+    price_start_date = (as_of_dt - timedelta(days=365 * 5 + 30)).strftime("%Y-%m-%d")
 
     print(f"\nAnalyzing {ticker} as of {as_of_date}")
     print(f"Loading data from {start_date} to {as_of_date}...")
@@ -74,8 +76,14 @@ def analyze_stock(ticker: str, as_of_date: str, window_days: int = 180, use_llm:
         print(f"Ticker {ticker} not found in data")
         return
 
-    # Calculate metrics first (this drops non-essential columns)
-    df = calculate_all_metrics(df)
+    # Load SEP price data for price metrics
+    try:
+        df_sep = reader.read_sep(start_date=price_start_date, end_date=as_of_date)
+    except FileNotFoundError:
+        df_sep = None
+
+    # Calculate metrics (including price metrics if SEP data available)
+    df = calculate_all_metrics(df, df_sep=df_sep)
 
     # Load tickers metadata for sector info and join
     tickers_df = reader.read_tickers(snapshot_date=as_of_date)

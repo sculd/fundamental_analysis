@@ -25,15 +25,39 @@ METRIC_CATEGORIES = {
     "Leverage": ["debt_to_equity", "debt_to_assets"],
 }
 
+# Price metrics (from SEP data) - these don't have percentile rankings
+# Format: (metric_name, description, base_price_col or None)
+PRICE_METRICS = [
+    ("return_1y", "1-Year Return", "price_1y_ago"),
+    ("return_5y_or_longest", "5-Year (or Longest) Return", "price_5y_ago"),
+    ("max_drawdown_1y", "Max Drawdown (1Y)", None),
+    ("max_drawdown_5y", "Max Drawdown (5Y)", None),
+    ("pct_from_high_5y", "% From 5Y High", "high_5y"),
+    ("pct_from_low_5y", "% From 5Y Low", "low_5y"),
+    ("volatility_1y", "Volatility (1Y, annualized)", None),
+    ("pct_from_sma_200", "% From 200-Day SMA", "sma_200"),
+]
+
 PERCENTILE_THRESHOLD = 90.0
+
+
+PERCENT_METRICS = {
+    "roe_calculated", "roic_calculated", "debt_to_assets",
+    "return_1y", "return_5y_or_longest",
+    "max_drawdown_1y", "max_drawdown_5y",
+    "pct_from_high_5y", "pct_from_low_5y",
+    "volatility_1y", "pct_from_sma_200",
+}
 
 
 def format_value(value, metric_name: str) -> str:
     """Format metric value for display."""
     if value is None:
         return "N/A"
-    if metric_name in ("roe_calculated", "roic_calculated", "debt_to_assets"):
+    if metric_name in PERCENT_METRICS:
         return f"{value:.1%}"
+    if metric_name == "return_period_days":
+        return f"{int(value)} days"
     return f"{value:.2f}"
 
 
@@ -138,6 +162,37 @@ def format_single_stock_analysis(
 
             lines.append(f"  {desc}")
             lines.append(f"    Value: {value_str}  |  Pctl: {percentile_str} {stats_str} {outlier_label}")
+
+    # Price metrics section (if available)
+    has_price_metrics = any(row.get(m[0]) is not None for m in PRICE_METRICS)
+    if has_price_metrics:
+        current_price = row.get("closeadj")
+        current_price_str = f"${current_price:.2f}" if current_price else "N/A"
+
+        lines.append(f"\nPrice History (Current: {current_price_str}):")
+        lines.append("-" * 70)
+
+        for metric_name, desc, base_col in PRICE_METRICS:
+            value = row.get(metric_name)
+            if value is None:
+                continue
+
+            value_str = format_value(value, metric_name)
+            base_price = row.get(base_col) if base_col else None
+
+            # Build suffix: (base -> current, period) or (base -> current) or empty
+            if base_price is not None:
+                period_desc = ""
+                if metric_name == "return_5y_or_longest":
+                    period_days = row.get("return_period_days")
+                    if period_days is not None:
+                        period_desc = f", {format_value(period_days, 'return_period_days')}"
+
+                suffix = f" (${base_price:.2f} -> {current_price_str}{period_desc})"
+            else:
+                suffix = ""
+
+            lines.append(f"  {desc}: {value_str}{suffix}")
 
     outlier_cutoff = 100 - percentile_threshold  # e.g., 10 when threshold=90
     lines.append("\n" + "-" * 70)
