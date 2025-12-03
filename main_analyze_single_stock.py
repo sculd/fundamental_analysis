@@ -5,8 +5,10 @@ from datetime import datetime, timedelta
 
 import anthropic
 import polars as pl
+from joblib import Memory
 
 from fundamental_analysis.data_acquisition.data_reader import DataReader
+from fundamental_analysis.utils.config import Config
 from fundamental_analysis.metrics import calculate_all_metrics
 from fundamental_analysis.scoring.common import ScoreOption
 from fundamental_analysis.scoring.deepdive.single_stock import (
@@ -18,7 +20,11 @@ from fundamental_analysis.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
+# Cache for LLM responses
+llm_cache = Memory(Config.DATA_DIR / "llm_cache", verbose=0)
 
+
+@llm_cache.cache
 def get_llm_analysis(ticker: str, as_of_date_str: str, metrics_str: str) -> str:
     """Get Claude's analysis of the stock using Anthropic API."""
 
