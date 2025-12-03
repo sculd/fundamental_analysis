@@ -10,6 +10,7 @@ from joblib import Memory
 from fundamental_analysis.data_acquisition.data_reader import DataReader
 from fundamental_analysis.utils.config import Config
 from fundamental_analysis.metrics import calculate_all_metrics
+from fundamental_analysis.metrics.price_metrics.price_metric import calculate_price_metrics
 from fundamental_analysis.scoring.common import ScoreOption
 from fundamental_analysis.scoring.deepdive.single_stock import (
     format_single_stock_analysis, format_price_chart, print_single_stock_analysis)
@@ -76,14 +77,14 @@ def analyze_stock(ticker: str, as_of_date: str, window_days: int = 180, use_llm:
         print(f"Ticker {ticker} not found in data")
         return
 
-    # Load SEP price data for price metrics
+    # Load SEP price data for price metrics (separate from SF1 metrics)
     try:
         df_sep = reader.read_sep(start_date=price_start_date, end_date=as_of_date)
     except FileNotFoundError:
         df_sep = None
 
-    # Calculate metrics (including price metrics if SEP data available)
-    df = calculate_all_metrics(df, df_sep=df_sep)
+    # Calculate SF1-based metrics (no price metrics here)
+    df = calculate_all_metrics(df)
 
     # Load tickers metadata for sector info and join
     tickers_df = reader.read_tickers(snapshot_date=as_of_date)
@@ -112,20 +113,31 @@ def analyze_stock(ticker: str, as_of_date: str, window_days: int = 180, use_llm:
 
     row = df_ticker.to_dicts()[0]
 
+    # Calculate price metrics at as-of-date (not SF1 release date)
+    df_ticker_price = None
+    if df_sep is not None:
+        df_ticker_sep = df_sep.filter(
+            (pl.col("ticker") == ticker) &
+            (pl.col("date") <= as_of_dt.date())
+        )
+        if len(df_ticker_sep) > 0:
+            df_ticker_price = df_ticker_sep.select(["date", "closeadj"])
+            # Calculate price metrics and get the as-of-date row
+            df_price_metrics = calculate_price_metrics(df_ticker_sep)
+            price_row = df_price_metrics.sort("date", descending=True).head(1).to_dicts()
+            if price_row:
+                # Merge price metrics into row dict
+                row.update(price_row[0])
+
     # Format and print analysis
     metrics_str = format_single_stock_analysis(row, ticker)
     print(metrics_str)
 
     # Print price chart if SEP data available
-    if df_sep is not None:
-        df_ticker_price = df_sep.filter(
-            (pl.col("ticker") == ticker) &
-            (pl.col("date") <= as_of_dt.date())
-        ).select(["date", "closeadj"])
-        if len(df_ticker_price) > 0:
-            chart = format_price_chart(df_ticker_price, ticker)
-            if chart:
-                print("\n" + chart)
+    if df_ticker_price is not None and len(df_ticker_price) > 0:
+        chart = format_price_chart(df_ticker_price, ticker)
+        if chart:
+            print("\n" + chart)
 
     # Get LLM analysis if requested
     if use_llm:
