@@ -12,7 +12,7 @@ from fundamental_analysis.utils.config import Config
 from fundamental_analysis.metrics import calculate_all_metrics
 from fundamental_analysis.scoring.common import ScoreOption
 from fundamental_analysis.scoring.deepdive.single_stock import (
-    format_single_stock_analysis, print_single_stock_analysis)
+    format_single_stock_analysis, format_price_chart, print_single_stock_analysis)
 from fundamental_analysis.scoring.percentile_score import \
     calculate_metric_percentiles
 from fundamental_analysis.segmentation.sector import add_sector_segmentation
@@ -115,6 +115,17 @@ def analyze_stock(ticker: str, as_of_date: str, window_days: int = 180, use_llm:
     # Format and print analysis
     metrics_str = format_single_stock_analysis(row, ticker)
     print(metrics_str)
+
+    # Print price chart if SEP data available
+    if df_sep is not None:
+        df_ticker_price = df_sep.filter(
+            (pl.col("ticker") == ticker) &
+            (pl.col("date") <= as_of_dt.date())
+        ).select(["date", "closeadj"])
+        if len(df_ticker_price) > 0:
+            chart = format_price_chart(df_ticker_price, ticker)
+            if chart:
+                print("\n" + chart)
 
     # Get LLM analysis if requested
     if use_llm:

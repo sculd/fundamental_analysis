@@ -1,5 +1,8 @@
 """Single stock analysis display functions."""
 
+import plotext as plt
+import polars as pl
+
 from fundamental_analysis.scoring.common import ALL_METRICS
 
 # Metric descriptions for human-friendly output
@@ -203,10 +206,65 @@ def format_single_stock_analysis(
     return "\n".join(lines)
 
 
+def format_price_chart(
+    df_price: pl.DataFrame,
+    ticker: str,
+    width: int = 70,
+    height: int = 15,
+) -> str:
+    """
+    Format ASCII price chart from SEP data.
+
+    Parameters
+    ----------
+    df_price : pl.DataFrame
+        Price data with columns: date, closeadj (filtered to single ticker)
+    ticker : str
+        Stock ticker symbol for title
+    width, height : int
+        Chart dimensions in characters
+    """
+    if df_price is None or len(df_price) == 0:
+        return ""
+
+    df = df_price.sort("date")
+    dates = df["date"].to_list()
+    prices = df["closeadj"].to_list()
+
+    # Downsample if too many points (take every nth point to fit width)
+    if len(prices) > width:
+        step = len(prices) // width
+        prices = prices[::step]
+        dates = dates[::step]
+
+    plt.clear_figure()
+    plt.plot_size(width, height)
+    plt.title(f"{ticker} Price History")
+    plt.plot(prices, marker="braille")
+    plt.theme("clear")
+
+    # Add date labels (start, middle, end)
+    if len(dates) >= 3:
+        plt.xticks(
+            [0, len(dates) // 2, len(dates) - 1],
+            [str(dates[0]), str(dates[len(dates) // 2]), str(dates[-1])]
+        )
+
+    # Capture output to string
+    return plt.build()
+
+
 def print_single_stock_analysis(
     row: dict,
     ticker: str,
     percentile_threshold: float = PERCENTILE_THRESHOLD,
+    df_price: pl.DataFrame | None = None,
 ) -> None:
     """Print formatted analysis for a single stock."""
     print(format_single_stock_analysis(row, ticker, percentile_threshold))
+
+    # Print price chart if data available
+    if df_price is not None and len(df_price) > 0:
+        chart = format_price_chart(df_price, ticker)
+        if chart:
+            print("\n" + chart)
