@@ -45,3 +45,13 @@ python main_metric_based_selection.py --metric debt_to_equity --direction unfavo
 ```
 
 Available metrics: `pe_ratio`, `pb_ratio`, `ps_ratio`, `pc_ratio`, `ev_ebitda_ratio`, `roe_calculated`, `roic_calculated`, `current_ratio`, `interest_coverage`, `debt_to_equity`, `debt_to_assets`
+
+### 4. Count-Based Selection
+
+Find stocks with multiple favorable/unfavorable metric outliers:
+
+```bash
+python main_count_based_selection.py --min-signals 3
+python main_count_based_selection.py --min-signals 3 --max-signals 5
+python main_count_based_selection.py --sort-by unfavorable_count  # Find risky stocks
+```
