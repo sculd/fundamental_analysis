@@ -209,11 +209,13 @@ def format_single_stock_analysis(
 def format_price_chart(
     df_price: pl.DataFrame,
     ticker: str,
+    df_baseline: pl.DataFrame | None = None,
+    baseline_ticker: str = "SPY",
     width: int = 70,
     height: int = 15,
 ) -> str:
     """
-    Format ASCII price chart from SEP data.
+    Format ASCII price chart from SEP data with optional baseline comparison.
 
     Parameters
     ----------
@@ -221,6 +223,11 @@ def format_price_chart(
         Price data with columns: date, closeadj (filtered to single ticker)
     ticker : str
         Stock ticker symbol for title
+    df_baseline : pl.DataFrame | None
+        Optional baseline price data (e.g., SPY) with columns: date, closeadj.
+        Baseline is rescaled so its starting point matches the ticker's starting price.
+    baseline_ticker : str
+        Baseline ticker symbol for legend (default: SPY)
     width, height : int
         Chart dimensions in characters
     """
@@ -231,16 +238,44 @@ def format_price_chart(
     dates = df["date"].to_list()
     prices = df["closeadj"].to_list()
 
+    # Process baseline if provided - rescale to start at same price as ticker
+    baseline_prices_scaled = None
+    if df_baseline is not None and len(df_baseline) > 0:
+        df_base = df_baseline.sort("date")
+        # Join on dates to align
+        df_joined = df.select(["date"]).join(
+            df_base.select(["date", "closeadj"]),
+            on="date",
+            how="left"
+        )
+        baseline_prices = df_joined["closeadj"].to_list()
+        if baseline_prices and baseline_prices[0] is not None:
+            # Rescale baseline so it starts at the same price as ticker
+            scale_factor = prices[0] / baseline_prices[0]
+            baseline_prices_scaled = [
+                p * scale_factor if p is not None else None
+                for p in baseline_prices
+            ]
+
     # Downsample if too many points (take every nth point to fit width)
     if len(prices) > width:
         step = len(prices) // width
         prices = prices[::step]
         dates = dates[::step]
+        if baseline_prices_scaled:
+            baseline_prices_scaled = baseline_prices_scaled[::step]
 
     plt.clear_figure()
     plt.plot_size(width, height)
-    plt.title(f"{ticker} Price History")
-    plt.plot(prices, marker="braille")
+
+    if baseline_prices_scaled:
+        plt.title(f"{ticker} vs {baseline_ticker}")
+        plt.plot(prices, label=ticker, marker="braille")
+        plt.plot(baseline_prices_scaled, label=baseline_ticker, marker="braille")
+    else:
+        plt.title(f"{ticker} Price History")
+        plt.plot(prices, marker="braille")
+
     plt.theme("clear")
 
     # Add date labels (start, middle, end)

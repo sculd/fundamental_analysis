@@ -135,7 +135,16 @@ def analyze_stock(ticker: str, as_of_date: str, window_days: int = 180, use_llm:
 
     # Print price chart if SEP data available
     if df_ticker_price is not None and len(df_ticker_price) > 0:
-        chart = format_price_chart(df_ticker_price, ticker)
+        # Get SPY baseline data for comparison
+        df_baseline = None
+        if df_sep is not None:
+            baseline_ticker = "BRK.B"
+            df_baseline = df_sep.filter(
+                (pl.col("ticker") == baseline_ticker) &
+                (pl.col("date") <= as_of_dt.date())
+            ).select(["date", "closeadj"])
+
+        chart = format_price_chart(df_ticker_price, ticker, baseline_ticker=baseline_ticker, df_baseline=df_baseline)
         if chart:
             print("\n" + chart)
 
