@@ -20,17 +20,6 @@ from fundamental_analysis.metrics.size_features import (
 # Identifiers to keep from SF1 data
 IDENTIFIER_COLUMNS = ["ticker", "reportperiod", "datekey", "calendardate"]
 
-# Price metric columns from SEP data
-PRICE_METRIC_COLUMNS = [
-    "closeadj", "price_1y_ago", "return_1y",
-    "price_5y_ago", "return_5y_or_longest", "return_period_days",
-    "max_drawdown_1y", "max_drawdown_5y",
-    "high_5y", "pct_from_high_5y",
-    "low_5y", "pct_from_low_5y",
-    "volatility_1y",
-    "sma_200", "pct_from_sma_200",
-]
-
 
 def calculate_all_metrics(
     df: pl.DataFrame,
