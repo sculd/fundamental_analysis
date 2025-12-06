@@ -149,8 +149,22 @@ def format_single_stock_analysis(
             p90 = row.get(f"{metric}_p90")
             direction = metric_directions.get(metric, "lower")
 
+            # Get growth values
+            growth_qoq = row.get(f"{metric}_growth_qoq")
+            growth_yoy = row.get(f"{metric}_growth_yoy")
+
             desc = METRIC_DESCRIPTIONS.get(metric, metric)
             value_str = format_value(value, metric)
+
+            # Add growth info to value string
+            growth_parts = []
+            if growth_qoq is not None:
+                growth_parts.append(f"QoQ: {growth_qoq:+.1%}")
+            if growth_yoy is not None:
+                growth_parts.append(f"YoY: {growth_yoy:+.1%}")
+            if growth_parts:
+                value_str += f" ({', '.join(growth_parts)})"
+
             percentile_str = format_percentile(percentile, percentile_threshold)
             median_str = format_value(median, metric)
             p10_str = format_value(p10, metric)
