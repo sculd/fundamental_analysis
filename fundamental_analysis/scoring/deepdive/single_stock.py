@@ -88,6 +88,18 @@ def format_growth(qoq: float | None, yoy: float | None) -> str:
     return f" ({', '.join(parts)})" if parts else ""
 
 
+def format_large_dollar(value: float) -> str:
+    """Format large numbers with T/B/M suffix."""
+    if abs(value) >= 1e12:
+        return f"${value / 1e12:.2f}T"
+    elif abs(value) >= 1e9:
+        return f"${value / 1e9:.2f}B"
+    elif abs(value) >= 1e6:
+        return f"${value / 1e6:.0f}M"
+    else:
+        return f"${value:,.0f}"
+
+
 def get_outlier_label(percentile, direction: str, threshold: float = PERCENTILE_THRESHOLD) -> str:
     """Get outlier label based on percentile and metric direction.
 
@@ -149,14 +161,7 @@ def format_single_stock_analysis(
     marketcap = row.get("marketcap")
 
     if marketcap is not None:
-        # Format market cap with appropriate suffix (T for trillions, B for billions, M for millions)
-        if marketcap >= 1e12:
-            mc_str = f"${marketcap / 1e12:.2f}T"
-        elif marketcap >= 1e9:
-            mc_str = f"${marketcap / 1e9:.2f}B"
-        else:
-            mc_str = f"${marketcap / 1e6:.0f}M"
-
+        mc_str = format_large_dollar(marketcap)
         marketcap_category = row.get("marketcap_category", "N/A")
         growth_str = format_growth(
             row.get("marketcap_growth_qoq"),
@@ -165,6 +170,27 @@ def format_single_stock_analysis(
         lines.append(f"  Market Cap: {mc_str} [{marketcap_category}]{growth_str}")
 
     lines.append("=" * 70)
+
+    # Fundamentals section (raw values with growth)
+    lines.append("\nFundamentals:")
+    lines.append("-" * 70)
+
+    fundamentals = [
+        ("revenue", "Revenue"),
+        ("netinc", "Net Income"),
+        ("equity", "Total Equity"),
+        ("assets", "Total Assets"),
+    ]
+
+    for metric, label in fundamentals:
+        value = row.get(metric)
+        if value is not None:
+            val_str = format_large_dollar(value)
+            growth_str = format_growth(
+                row.get(f"{metric}_growth_qoq"),
+                row.get(f"{metric}_growth_yoy")
+            )
+            lines.append(f"  {label}: {val_str}{growth_str}")
 
     for category, metrics in METRIC_CATEGORIES.items():
         lines.append(f"\n{category}:")

@@ -4,8 +4,8 @@ import polars as pl
 
 from fundamental_analysis.metrics.temporal_utils import temporal_change
 
-# Raw size features from SF1 that this module uses (preserved separately by orchestrator)
-SIZE_FEATURE_RAW_COLUMNS = ["marketcap", "revenue", "assets"]
+# Raw size/fundamental features from SF1 (preserved separately by orchestrator)
+SIZE_FEATURE_RAW_COLUMNS = ["marketcap", "revenue", "netinc", "equity", "assets"]
 
 
 def _marketcap_category_expr() -> pl.Expr:
@@ -53,11 +53,15 @@ def get_size_growth_expressions() -> list[pl.Expr]:
     """
     Return temporal growth feature expressions for size metrics.
 
-    Includes growth (QoQ and YoY) for revenue, marketcap, and assets.
+    Includes growth (QoQ and YoY) for revenue, netinc, equity, marketcap, and assets.
     """
     return [
         temporal_change(pl.col("revenue"), 1).alias("revenue_growth_qoq"),
         temporal_change(pl.col("revenue"), 4).alias("revenue_growth_yoy"),
+        temporal_change(pl.col("netinc"), 1).alias("netinc_growth_qoq"),
+        temporal_change(pl.col("netinc"), 4).alias("netinc_growth_yoy"),
+        temporal_change(pl.col("equity"), 1).alias("equity_growth_qoq"),
+        temporal_change(pl.col("equity"), 4).alias("equity_growth_yoy"),
         temporal_change(pl.col("marketcap"), 1).alias("marketcap_growth_qoq"),
         temporal_change(pl.col("marketcap"), 4).alias("marketcap_growth_yoy"),
         temporal_change(pl.col("assets"), 1).alias("assets_growth_qoq"),
