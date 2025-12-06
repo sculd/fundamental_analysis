@@ -8,15 +8,16 @@ import polars as pl
 from joblib import Memory
 
 from fundamental_analysis.data_acquisition.data_reader import DataReader
-from fundamental_analysis.utils.config import Config
 from fundamental_analysis.metrics import calculate_all_metrics
-from fundamental_analysis.price_metrics.price_metric import calculate_price_metrics
+from fundamental_analysis.price_metrics.price_metric import \
+    calculate_price_metrics
 from fundamental_analysis.scoring.common import ScoreOption
 from fundamental_analysis.scoring.deepdive.single_stock import (
-    format_single_stock_analysis, format_price_chart)
+    format_price_chart, format_single_stock_analysis)
 from fundamental_analysis.scoring.percentile_score import \
     calculate_metric_percentiles
 from fundamental_analysis.segmentation.sector import add_sector_segmentation
+from fundamental_analysis.utils.config import Config
 from fundamental_analysis.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
