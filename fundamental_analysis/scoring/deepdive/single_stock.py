@@ -78,6 +78,16 @@ def format_percentile(percentile, threshold: float = PERCENTILE_THRESHOLD) -> st
     return f"{percentile:.1f}%{indicator}"
 
 
+def format_growth(qoq: float | None, yoy: float | None) -> str:
+    """Format QoQ and YoY growth as string. Returns empty string if both are None."""
+    parts = []
+    if qoq is not None:
+        parts.append(f"QoQ: {qoq:+.1%}")
+    if yoy is not None:
+        parts.append(f"YoY: {yoy:+.1%}")
+    return f" ({', '.join(parts)})" if parts else ""
+
+
 def get_outlier_label(percentile, direction: str, threshold: float = PERCENTILE_THRESHOLD) -> str:
     """Get outlier label based on percentile and metric direction.
 
@@ -134,6 +144,26 @@ def format_single_stock_analysis(
     lines.append("=" * 70)
     lines.append(f"  {ticker} - Fundamental Analysis")
     lines.append(f"  As of: {row.get('datekey', 'N/A')} | Segment: {row.get('segment', 'N/A')}")
+
+    # Market cap info
+    marketcap = row.get("marketcap")
+
+    if marketcap is not None:
+        # Format market cap with appropriate suffix (T for trillions, B for billions, M for millions)
+        if marketcap >= 1e12:
+            mc_str = f"${marketcap / 1e12:.2f}T"
+        elif marketcap >= 1e9:
+            mc_str = f"${marketcap / 1e9:.2f}B"
+        else:
+            mc_str = f"${marketcap / 1e6:.0f}M"
+
+        marketcap_category = row.get("marketcap_category", "N/A")
+        growth_str = format_growth(
+            row.get("marketcap_growth_qoq"),
+            row.get("marketcap_growth_yoy")
+        )
+        lines.append(f"  Market Cap: {mc_str} [{marketcap_category}]{growth_str}")
+
     lines.append("=" * 70)
 
     for category, metrics in METRIC_CATEGORIES.items():
@@ -149,21 +179,12 @@ def format_single_stock_analysis(
             p90 = row.get(f"{metric}_p90")
             direction = metric_directions.get(metric, "lower")
 
-            # Get growth values
-            growth_qoq = row.get(f"{metric}_growth_qoq")
-            growth_yoy = row.get(f"{metric}_growth_yoy")
-
             desc = METRIC_DESCRIPTIONS.get(metric, metric)
             value_str = format_value(value, metric)
-
-            # Add growth info to value string
-            growth_parts = []
-            if growth_qoq is not None:
-                growth_parts.append(f"QoQ: {growth_qoq:+.1%}")
-            if growth_yoy is not None:
-                growth_parts.append(f"YoY: {growth_yoy:+.1%}")
-            if growth_parts:
-                value_str += f" ({', '.join(growth_parts)})"
+            value_str += format_growth(
+                row.get(f"{metric}_growth_qoq"),
+                row.get(f"{metric}_growth_yoy")
+            )
 
             percentile_str = format_percentile(percentile, percentile_threshold)
             median_str = format_value(median, metric)
