@@ -167,7 +167,9 @@ def run_count_based_selection(
             "total_signal_count", "net_signal",
             "metrics_available",
         ]
-        print(df_sorted.select(display_cols).head(top_n))
+        df_display = df_sorted.select(display_cols).head(top_n)
+        with pl.Config(tbl_rows=top_n):
+            print(df_display)
 
         # Suggest using single stock analysis for drill-down
         top_ticker = df_sorted[0, "ticker"]
