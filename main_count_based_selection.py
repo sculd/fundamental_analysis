@@ -87,7 +87,7 @@ def main():
 
 def load_verdicts() -> pl.DataFrame | None:
     """Load verdicts CSV and aggregate comments per ticker."""
-    verdicts_path = Config.DATA_DIR / "verdicts.csv"
+    verdicts_path = Config.PROJECT_ROOT / "verdicts.csv"
     if not verdicts_path.exists():
         return None
 
@@ -201,7 +201,7 @@ def run_count_based_selection(
         else:
             df_display = df_display.with_columns(pl.lit(None).alias("verdict"))
 
-        with pl.Config(tbl_rows=top_n):
+        with pl.Config(tbl_rows=top_n, fmt_str_lengths=60):
             print(df_display)
 
         # Suggest using single stock analysis for drill-down
