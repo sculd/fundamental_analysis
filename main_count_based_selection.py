@@ -2,10 +2,12 @@
 
 import argparse
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import polars as pl
 
 from fundamental_analysis.data_acquisition.data_reader import DataReader
+from fundamental_analysis.utils.config import Config
 from fundamental_analysis.metrics import calculate_all_metrics
 from fundamental_analysis.scoring.common import ScoreOption
 from fundamental_analysis.scoring.deepdive.count_based_selection import \
@@ -80,6 +82,29 @@ def main():
         ascending=args.ascending,
         top_n=args.top_n,
         window_days=args.window_days,
+    )
+
+
+def load_verdicts() -> pl.DataFrame | None:
+    """Load verdicts CSV and aggregate comments per ticker."""
+    verdicts_path = Config.DATA_DIR / "verdicts.csv"
+    if not verdicts_path.exists():
+        return None
+
+    df = pl.read_csv(verdicts_path)
+    if len(df) == 0:
+        return None
+
+    # Format each row as "comment (date)" and aggregate by ticker
+    return df.with_columns(
+        pl.concat_str([
+            pl.col("comment"),
+            pl.lit(" ("),
+            pl.col("date"),
+            pl.lit(")")
+        ]).alias("verdict_entry")
+    ).group_by("ticker").agg(
+        pl.col("verdict_entry").str.concat("\n").alias("verdict")
     )
 
 
@@ -168,6 +193,14 @@ def run_count_based_selection(
             "metrics_available",
         ]
         df_display = df_sorted.select(display_cols).head(top_n)
+
+        # Join verdicts if available
+        verdicts_df = load_verdicts()
+        if verdicts_df is not None:
+            df_display = df_display.join(verdicts_df, on="ticker", how="left")
+        else:
+            df_display = df_display.with_columns(pl.lit(None).alias("verdict"))
+
         with pl.Config(tbl_rows=top_n):
             print(df_display)
 
