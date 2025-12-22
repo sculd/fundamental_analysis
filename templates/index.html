@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Verdicts</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.5;
+            padding: 1rem;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .verdict-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .verdict-item {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .verdict-header {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            gap: 1rem;
+            transition: background 0.2s;
+        }
+
+        .verdict-header:hover {
+            background: #f9f9f9;
+        }
+
+        .ticker {
+            font-weight: 700;
+            font-size: 1rem;
+            min-width: 60px;
+            color: #2563eb;
+        }
+
+        .date {
+            font-size: 0.8rem;
+            color: #666;
+            min-width: 90px;
+        }
+
+        .comment {
+            flex: 1;
+            font-size: 0.9rem;
+            color: #444;
+        }
+
+        .expand-icon {
+            font-size: 0.8rem;
+            color: #999;
+            transition: transform 0.2s;
+        }
+
+        .verdict-item.expanded .expand-icon {
+            transform: rotate(90deg);
+        }
+
+        .verdict-details {
+            display: none;
+            border-top: 1px solid #eee;
+            background: #fafafa;
+        }
+
+        .verdict-item.expanded .verdict-details {
+            display: block;
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #ddd;
+            background: #fff;
+        }
+
+        .tab {
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            font-size: 0.9rem;
+            border: none;
+            background: none;
+            color: #666;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .tab:hover {
+            color: #333;
+            background: #f5f5f5;
+        }
+
+        .tab.active {
+            color: #2563eb;
+            border-bottom-color: #2563eb;
+        }
+
+        .tab-content {
+            display: none;
+            padding: 1rem;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .metrics-pre {
+            font-family: "SF Mono", Menlo, Consolas, monospace;
+            font-size: 0.75rem;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            word-break: break-word;
+            background: #fff;
+            padding: 1rem;
+            border-radius: 4px;
+            border: 1px solid #e5e5e5;
+        }
+
+        .analysis-text {
+            font-size: 0.9rem;
+            line-height: 1.6;
+            background: #fff;
+            padding: 1rem;
+            border-radius: 4px;
+            border: 1px solid #e5e5e5;
+        }
+
+        /* Markdown styles */
+        .analysis-text h1, .analysis-text h2, .analysis-text h3 {
+            margin: 1rem 0 0.5rem 0;
+            color: #1a1a1a;
+        }
+        .analysis-text h1 { font-size: 1.3rem; }
+        .analysis-text h2 { font-size: 1.1rem; }
+        .analysis-text h3 { font-size: 1rem; }
+        .analysis-text p { margin: 0.5rem 0; }
+        .analysis-text ul, .analysis-text ol {
+            margin: 0.5rem 0 0.5rem 1.5rem;
+        }
+        .analysis-text li { margin: 0.25rem 0; }
+        .analysis-text strong { color: #1a1a1a; }
+        .analysis-text code {
+            background: #f0f0f0;
+            padding: 0.1rem 0.3rem;
+            border-radius: 3px;
+            font-size: 0.85em;
+        }
+        .analysis-text blockquote {
+            border-left: 3px solid #ddd;
+            margin: 0.5rem 0;
+            padding-left: 1rem;
+            color: #666;
+        }
+
+        /* Sentiment colors */
+        .comment.positive { color: #16a34a; }
+        .comment.negative { color: #dc2626; }
+        .comment.caution { color: #ca8a04; }
+
+        /* Mobile responsive */
+        @media (max-width: 600px) {
+            body {
+                padding: 0.5rem;
+            }
+
+            h1 {
+                font-size: 1.25rem;
+            }
+
+            .verdict-header {
+                flex-wrap: wrap;
+                padding: 0.75rem;
+                gap: 0.5rem;
+            }
+
+            .ticker {
+                min-width: auto;
+            }
+
+            .date {
+                min-width: auto;
+                order: 2;
+            }
+
+            .comment {
+                width: 100%;
+                order: 3;
+            }
+
+            .expand-icon {
+                order: 1;
+                margin-left: auto;
+            }
+
+            .tab {
+                padding: 0.6rem 1rem;
+                font-size: 0.85rem;
+            }
+
+            .metrics-pre {
+                font-size: 0.65rem;
+                padding: 0.75rem;
+            }
+
+            .tab-content {
+                padding: 0.75rem;
+                max-height: 350px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Stock Verdicts</h1>
+        <div class="verdict-list">
+            {% for v in verdicts %}
+            <div class="verdict-item" data-index="{{ loop.index0 }}">
+                <div class="verdict-header" onclick="toggleExpand(this.parentElement)">
+                    <span class="ticker">{{ v.ticker }}</span>
+                    <span class="date">{{ v.date }}</span>
+                    <span class="comment">{{ v.comment }}</span>
+                    <span class="expand-icon">▶</span>
+                </div>
+                <div class="verdict-details">
+                    <div class="tabs">
+                        <button class="tab active" onclick="switchTab(event, 'metrics')">Metrics</button>
+                        <button class="tab" onclick="switchTab(event, 'analysis')">Analysis</button>
+                    </div>
+                    <div class="tab-content active" data-tab="metrics">
+                        <pre class="metrics-pre">{{ v.metrics_str }}</pre>
+                    </div>
+                    <div class="tab-content" data-tab="analysis">
+                        <div class="analysis-text" data-markdown="{{ v.analysis|e }}"></div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        // Render markdown for all analysis sections
+        document.querySelectorAll('.analysis-text[data-markdown]').forEach(el => {
+            const md = el.dataset.markdown;
+            if (md && md.trim()) {
+                el.innerHTML = marked.parse(md);
+            } else {
+                el.textContent = 'No analysis available';
+            }
+        });
+
+        function toggleExpand(item) {
+            item.classList.toggle('expanded');
+        }
+
+        function switchTab(event, tabName) {
+            const details = event.target.closest('.verdict-details');
+
+            // Update tab buttons
+            details.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Update tab content
+            details.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.toggle('active', content.dataset.tab === tabName);
+            });
+        }
+
+        // Apply sentiment colors on load
+        document.querySelectorAll('.comment').forEach(el => {
+            const text = el.textContent.toLowerCase();
+            if (text.includes('compelling') || text.includes('opportunity') || text.includes('sound') && !text.includes('not')) {
+                el.classList.add('positive');
+            } else if (text.includes('not') || text.includes('avoid') || text.includes('distress') || text.includes('poor')) {
+                el.classList.add('negative');
+            } else if (text.includes('speculative') || text.includes('risk') || text.includes('volatility')) {
+                el.classList.add('caution');
+            }
+        });
+    </script>
+</body>
+</html>
