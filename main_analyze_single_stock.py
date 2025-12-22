@@ -1,11 +1,11 @@
 """Analyze a single stock's fundamental metrics at a point in time."""
 
 import argparse
+import json
+from pathlib import Path
 from datetime import datetime, timedelta
-
 import anthropic
 import polars as pl
-from joblib import Memory
 
 from fundamental_analysis.data_acquisition.data_reader import DataReader
 from fundamental_analysis.metrics import calculate_all_metrics
@@ -22,11 +22,43 @@ from fundamental_analysis.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
-# Cache for LLM responses
-llm_cache = Memory(Config.DATA_DIR / "llm_cache", verbose=0)
+def llm_readable_cache(get_llm_analysis_):
+    cache_file = Path("llm_readable_cache") / "cached.jsonl"
+
+    def with_caching(ticker: str, as_of_date_str: str, metrics_str: str) -> str:
+        key = f"{ticker}_{as_of_date_str}"
+
+        # Load existing cache
+        cache = {}
+        if cache_file.exists():
+            for line in cache_file.read_text().splitlines():
+                if line.strip():
+                    entry = json.loads(line)
+                    cache[entry["key"]] = entry
+
+        # Return cached result if exists
+        if key in cache:
+            return cache[key]["analysis"]
+
+        result = get_llm_analysis_(ticker, as_of_date_str, metrics_str)
+
+        # Append new entry
+        entry = {
+            "key": key,
+            "ticker": ticker,
+            "date": as_of_date_str,
+            "metrics_str": metrics_str,
+            "analysis": result,
+            "timestamp": datetime.now().isoformat(),
+        }
+        with cache_file.open("a") as f:
+            f.write(json.dumps(entry) + "\n")
+
+        return result
+    return with_caching
 
 
-@llm_cache.cache
+@llm_readable_cache
 def get_llm_analysis(ticker: str, as_of_date_str: str, metrics_str: str) -> str:
     """Get Claude's analysis of the stock using Anthropic API."""
 
